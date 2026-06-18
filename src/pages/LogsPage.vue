@@ -4,7 +4,7 @@ import { useScheduleStore } from '../stores/schedule';
 import LogPanel from '../components/logs/LogPanel.vue';
 import ConflictAlert from '../components/logs/ConflictAlert.vue';
 import ShipDetailSidebar from '../components/sidebar/ShipDetailSidebar.vue';
-import { Anchor, LayoutDashboard, History, User, RefreshCw, Settings, Bell } from 'lucide-vue-next';
+import { Anchor, LayoutDashboard, User, RefreshCw, Settings, Bell } from 'lucide-vue-next';
 import { format } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
 import { computed, onMounted, ref } from 'vue';

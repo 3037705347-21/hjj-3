@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { CargoType } from '../types';
+import type { CargoType } from '../../types';
 import { Boxes, Mountain, Droplets, Package, Car } from 'lucide-vue-next';
 
 defineProps<{

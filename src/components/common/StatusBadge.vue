@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { OperationStatus } from '../types';
+import type { OperationStatus } from '../../types';
 import {
   Anchor,
   Navigation,

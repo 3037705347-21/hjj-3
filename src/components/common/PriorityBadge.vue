@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { ShipPriority } from '../types';
+import type { ShipPriority } from '../../types';
 import { AlertTriangle, Flame, Minus, ChevronDown } from 'lucide-vue-next';
 
 defineProps<{

@@ -6,7 +6,7 @@ import StatusBadge from '../common/StatusBadge.vue';
 import CargoTypeIcon from '../common/CargoTypeIcon.vue';
 import { format, differenceInHours, differenceInMinutes } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
-import { Search, Filter, ArrowUpDown } from 'lucide-vue-next';
+import { Search, ArrowUpDown } from 'lucide-vue-next';
 import type { OperationStatus, ShipPriority } from '../../types';
 
 const store = useScheduleStore();

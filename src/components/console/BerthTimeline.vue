@@ -8,7 +8,7 @@ import { format, addHours, differenceInMinutes } from 'date-fns';
 import { AlertTriangle, Wrench, GripVertical } from 'lucide-vue-next';
 
 const store = useScheduleStore();
-const { detectAllConflicts, hasConflicts } = useConflictDetection();
+const { detectAllConflicts } = useConflictDetection();
 
 const timelineRef = ref<HTMLElement | null>(null);
 const rowHeight = 56;
@@ -20,8 +20,6 @@ const endTime = computed(() => addHours(new Date(), 66));
 const totalHours = computed(() =>
   (endTime.value.getTime() - startTime.value.getTime()) / 3600000,
 );
-
-const timeScale = ref(1);
 
 function getPixelPerHour() {
   if (!timelineRef.value) return 60;
@@ -45,7 +43,7 @@ function getScheduleDuration(): number {
   return 4;
 }
 
-const { dragState, startDrag, onDragOver, onDragLeave, onDrop } = useDragSchedule(
+const { startDrag, onDragOver, onDragLeave, onDrop } = useDragSchedule(
   getTimeFromX,
   getBerthFromY,
   getScheduleDuration,
