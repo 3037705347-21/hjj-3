@@ -1,0 +1,78 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap');
+
+:root {
+  font-family: 'Inter', system-ui, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #2d4f7c #0a1628;
+}
+
+*::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+*::-webkit-scrollbar-track {
+  background: #0a1628;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: #2d4f7c;
+  border-radius: 3px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: #4a7ab0;
+}
+
+body {
+  margin: 0;
+  background-color: #050c18;
+  color: #b0cde8;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+.console-grid-bg {
+  background-image:
+    linear-gradient(rgba(74, 122, 176, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(74, 122, 176, 0.06) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+.panel-border {
+  border: 1px solid rgba(74, 122, 176, 0.25);
+  background: linear-gradient(180deg, rgba(15, 31, 54, 0.9) 0%, rgba(10, 22, 40, 0.95) 100%);
+  backdrop-filter: blur(8px);
+}
+
+.glow-text-orange {
+  text-shadow: 0 0 10px rgba(255, 107, 53, 0.6);
+}
+
+.glow-text-cyan {
+  text-shadow: 0 0 10px rgba(0, 212, 170, 0.6);
+}
+
+.dragging {
+  opacity: 0.5;
+  transform: scale(1.02);
+  cursor: grabbing;
+}
+
+.drag-over {
+  background-color: rgba(0, 212, 170, 0.1) !important;
+  border-color: #00d4aa !important;
+}
