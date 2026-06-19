@@ -20,6 +20,8 @@ import {
   mockLogs,
 } from '../data/mock';
 import { useScheduleLogger } from '../composables/useScheduleLogger';
+import { usePermissionStore } from './permission';
+import { useAuthStore } from './auth';
 
 export const useScheduleStore = defineStore('schedule', () => {
   const ships = ref<Ship[]>(mockShips);
@@ -31,6 +33,18 @@ export const useScheduleStore = defineStore('schedule', () => {
   const selectedScheduleId = ref<string | null>(null);
   const currentOperator = ref('张伟');
   const logger = useScheduleLogger();
+
+  function recordAudit(action: 'schedule_write' | 'conflict_resolve' | 'log_export', targetId: string, description: string, before: Record<string, unknown> | null = null, after: Record<string, unknown> | null = null) {
+    try {
+      const permStore = usePermissionStore();
+      const auth = useAuthStore();
+      if (auth.currentUser) {
+        permStore.addAuditLog(action, targetId, 'schedule', description, before, after);
+      }
+    } catch {
+      // permission store may not be initialized yet
+    }
+  }
 
   const DEFAULT_DELAY_THRESHOLD = 30;
 
@@ -231,6 +245,7 @@ export const useScheduleStore = defineStore('schedule', () => {
       before: before as unknown as Record<string, unknown>,
       after: { ...updates } as Record<string, unknown>,
     });
+    recordAudit('schedule_write', id, `更新调度计划 ${id}`, before as unknown as Record<string, unknown>, { ...updates } as Record<string, unknown>);
   }
 
   function checkAndWarnDelay(
@@ -442,6 +457,7 @@ export const useScheduleStore = defineStore('schedule', () => {
           description: c.message,
         });
       }
+      recordAudit('conflict_resolve', c.scheduleId, c.message, null, { severity: c.severity, type: c.type });
     });
   }
 
@@ -490,6 +506,7 @@ export const useScheduleStore = defineStore('schedule', () => {
       description: `新增调度计划 ${newId}`,
       after: { ...newSchedule } as unknown as Record<string, unknown>,
     });
+    recordAudit('schedule_write', newId, `新增调度计划 ${newId}`, null, { shipId: data.shipId, berthId: data.berthId } as unknown as Record<string, unknown>);
     return newSchedule;
   }
 
@@ -509,6 +526,7 @@ export const useScheduleStore = defineStore('schedule', () => {
       description: `删除调度计划 ${id}`,
       before: before as unknown as Record<string, unknown>,
     });
+    recordAudit('schedule_write', id, `删除调度计划 ${id}`, before as unknown as Record<string, unknown>, null);
   }
 
   function copySchedule(id: string) {

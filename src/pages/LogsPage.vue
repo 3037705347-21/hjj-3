@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { useRouter } from 'vue-router';
 import { useScheduleStore } from '../stores/schedule';
+import { useAuthStore } from '../stores/auth';
+import { USER_ROLE_LABELS } from '../types';
 import LogPanel from '../components/logs/LogPanel.vue';
 import ConflictAlert from '../components/logs/ConflictAlert.vue';
 import ShipDetailSidebar from '../components/sidebar/ShipDetailSidebar.vue';
@@ -16,12 +18,15 @@ import {
   CheckCircle,
   TrendingUp,
   TrendingDown,
+  Shield,
+  Users,
 } from 'lucide-vue-next';
 import { format } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
 import { computed, onMounted, ref } from 'vue';
 
 const store = useScheduleStore();
+const authStore = useAuthStore();
 const router = useRouter();
 const currentTime = ref(new Date());
 
@@ -98,6 +103,22 @@ const auditStats = computed(() => [
             >
               调度日志
             </button>
+            <button
+              v-if="authStore.canManageUsers"
+              @click="router.push('/permission/users')"
+              class="px-3 py-1.5 rounded text-xs font-mono font-medium text-console-300 border border-console-500/30 hover:bg-console-700/50 hover:text-console-100 transition-all flex items-center gap-1.5"
+            >
+              <Users class="w-3.5 h-3.5" />
+              用户管理
+            </button>
+            <button
+              v-if="authStore.canManageRoles"
+              @click="router.push('/permission/roles')"
+              class="px-3 py-1.5 rounded text-xs font-mono font-medium text-console-300 border border-console-500/30 hover:bg-console-700/50 hover:text-console-100 transition-all flex items-center gap-1.5"
+            >
+              <Shield class="w-3.5 h-3.5" />
+              角色配置
+            </button>
           </nav>
         </div>
 
@@ -136,8 +157,8 @@ const auditStats = computed(() => [
               <User class="w-4 h-4 text-white" />
             </div>
             <div>
-              <p class="text-xs font-mono font-medium text-console-100">{{ store.currentOperator }}</p>
-              <p class="text-[9px] font-mono text-console-400">调度员</p>
+              <p class="text-xs font-mono font-medium text-console-100">{{ authStore.currentUser?.displayName || store.currentOperator }}</p>
+              <p class="text-[9px] font-mono text-console-400">{{ authStore.currentUser ? USER_ROLE_LABELS[authStore.currentUser.role] : '调度员' }}</p>
             </div>
           </div>
         </div>

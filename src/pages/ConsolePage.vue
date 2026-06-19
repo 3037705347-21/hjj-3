@@ -2,13 +2,15 @@
 import { useRouter } from 'vue-router';
 import { computed, onMounted, ref } from 'vue';
 import { useScheduleStore } from '../stores/schedule';
+import { useAuthStore } from '../stores/auth';
+import { USER_ROLE_LABELS } from '../types';
 import StatsCards from '../components/console/StatsCards.vue';
 import BerthTimeline from '../components/console/BerthTimeline.vue';
 import ShipListTable from '../components/console/ShipListTable.vue';
 import TideIndicator from '../components/console/TideIndicator.vue';
 import ShipDetailSidebar from '../components/sidebar/ShipDetailSidebar.vue';
 import LogPanel from '../components/logs/LogPanel.vue';
-import { Anchor, History, User, RefreshCw, Settings, Bell } from 'lucide-vue-next';
+import { Anchor, History, User, RefreshCw, Settings, Bell, Shield, Users } from 'lucide-vue-next';
 import { format } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
 import type { ScheduleFilterCriteria, OperationStatus } from '../types';
@@ -27,6 +29,7 @@ type StatKey =
 type ExternalFilter = Partial<ScheduleFilterCriteria> & { __token?: number };
 
 const store = useScheduleStore();
+const authStore = useAuthStore();
 const router = useRouter();
 
 const currentTime = ref(new Date());
@@ -128,6 +131,22 @@ function onStatCardClick(key: StatKey) {
               <History class="w-3.5 h-3.5" />
               调度日志
             </button>
+            <button
+              v-if="authStore.canManageUsers"
+              @click="router.push('/permission/users')"
+              class="px-3 py-1.5 rounded text-xs font-mono font-medium text-console-300 border border-console-500/30 hover:bg-console-700/50 hover:text-console-100 transition-all flex items-center gap-1.5"
+            >
+              <Users class="w-3.5 h-3.5" />
+              用户管理
+            </button>
+            <button
+              v-if="authStore.canManageRoles"
+              @click="router.push('/permission/roles')"
+              class="px-3 py-1.5 rounded text-xs font-mono font-medium text-console-300 border border-console-500/30 hover:bg-console-700/50 hover:text-console-100 transition-all flex items-center gap-1.5"
+            >
+              <Shield class="w-3.5 h-3.5" />
+              角色配置
+            </button>
           </nav>
         </div>
 
@@ -166,8 +185,8 @@ function onStatCardClick(key: StatKey) {
               <User class="w-4 h-4 text-white" />
             </div>
             <div>
-              <p class="text-xs font-mono font-medium text-console-100">{{ store.currentOperator }}</p>
-              <p class="text-[9px] font-mono text-console-400">调度员</p>
+              <p class="text-xs font-mono font-medium text-console-100">{{ authStore.currentUser?.displayName || store.currentOperator }}</p>
+              <p class="text-[9px] font-mono text-console-400">{{ authStore.currentUser ? USER_ROLE_LABELS[authStore.currentUser.role] : '调度员' }}</p>
             </div>
           </div>
         </div>

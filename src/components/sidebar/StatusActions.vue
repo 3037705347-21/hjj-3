@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { BerthSchedule, OperationStatus } from '../../types';
 import { useScheduleStore } from '../../stores/schedule';
+import { useAuthStore } from '../../stores/auth';
 import {
   Anchor,
   Navigation,
@@ -11,6 +12,7 @@ import {
   CheckCircle2,
   MessageSquare,
   AlertTriangle,
+  Lock,
 } from 'lucide-vue-next';
 import { ref, watch } from 'vue';
 
@@ -19,6 +21,7 @@ const props = defineProps<{
 }>();
 
 const store = useScheduleStore();
+const authStore = useAuthStore();
 const remarkInput = ref(props.schedule.remarks || '');
 const delayReasonInput = ref(props.schedule.delayReason || '');
 
@@ -43,29 +46,40 @@ const statusActions: { status: OperationStatus; label: string; icon: typeof Anch
 ];
 
 function updateStatus(status: OperationStatus) {
+  if (!authStore.canChangeStatus) return;
   store.updateScheduleStatus(props.schedule.id, status);
 }
 
 function saveRemark() {
+  if (!authStore.canEditSchedule) return;
   store.updateSchedule(props.schedule.id, { remarks: remarkInput.value });
 }
 
 function saveDelayReason() {
+  if (!authStore.canEditSchedule) return;
   store.updateDelayReason(props.schedule.id, delayReasonInput.value);
 }
 </script>
 
 <template>
   <div class="panel-border rounded-lg p-4">
-    <h3 class="font-mono text-sm font-semibold text-console-100 mb-3">状态控制</h3>
+    <div class="flex items-center justify-between mb-3">
+      <h3 class="font-mono text-sm font-semibold text-console-100">状态控制</h3>
+      <div v-if="!authStore.canChangeStatus" class="flex items-center gap-1 text-[10px] font-mono text-harbor-yellow">
+        <Lock class="w-3 h-3" />
+        <span>只读</span>
+      </div>
+    </div>
 
     <div class="grid grid-cols-4 gap-2 mb-4">
       <button
         v-for="action in statusActions"
         :key="action.status"
         @click="updateStatus(action.status)"
+        :disabled="!authStore.canChangeStatus"
         :class="[
           'flex flex-col items-center gap-1 py-2 px-1 rounded border transition-all duration-150',
+          authStore.canChangeStatus ? 'cursor-pointer' : 'cursor-not-allowed opacity-50',
           schedule.status === action.status
             ? action.color + ' bg-opacity-20 shadow-glow-blue scale-[1.02]'
             : 'border-console-600/50 text-console-400 hover:border-opacity-80',
@@ -84,9 +98,10 @@ function saveDelayReason() {
       <textarea
         v-model="delayReasonInput"
         @blur="saveDelayReason"
+        :readonly="!authStore.canEditSchedule"
         rows="2"
         placeholder="输入延误原因..."
-        class="w-full px-3 py-2 text-xs font-mono bg-console-800/80 border border-console-500/40 rounded text-console-100 placeholder:text-console-500 focus:outline-none focus:border-harbor-yellow/50 resize-none"
+        class="w-full px-3 py-2 text-xs font-mono bg-console-800/80 border border-console-500/40 rounded text-console-100 placeholder:text-console-500 focus:outline-none focus:border-harbor-yellow/50 resize-none disabled:opacity-50 disabled:cursor-not-allowed"
       />
     </div>
 
@@ -98,9 +113,10 @@ function saveDelayReason() {
       <textarea
         v-model="remarkInput"
         @blur="saveRemark"
+        :readonly="!authStore.canEditSchedule"
         rows="3"
         placeholder="输入调度备注..."
-        class="w-full px-3 py-2 text-xs font-mono bg-console-800/80 border border-console-500/40 rounded text-console-100 placeholder:text-console-500 focus:outline-none focus:border-harbor-cyan/50 resize-none"
+        class="w-full px-3 py-2 text-xs font-mono bg-console-800/80 border border-console-500/40 rounded text-console-100 placeholder:text-console-500 focus:outline-none focus:border-harbor-cyan/50 resize-none disabled:opacity-50 disabled:cursor-not-allowed"
       />
     </div>
   </div>
