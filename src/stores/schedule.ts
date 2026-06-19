@@ -95,6 +95,67 @@ export const useScheduleStore = defineStore('schedule', () => {
     ).length;
   });
 
+  const avgWaitingMinutes = computed(() => {
+    const now = new Date();
+    const waitingShips = schedules.value.filter(
+      (s) => s.status === 'anchored' || s.status === 'approaching',
+    );
+    if (waitingShips.length === 0) return 0;
+    let totalMinutes = 0;
+    let count = 0;
+    waitingShips.forEach((s) => {
+      const eta = new Date(s.eta);
+      if (eta < now) {
+        totalMinutes += (now.getTime() - eta.getTime()) / 60000;
+        count++;
+      }
+    });
+    if (count === 0) return 0;
+    return Math.round(totalMinutes / count);
+  });
+
+  const todayDeparted = computed(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today.getTime() + 24 * 3600 * 1000);
+    return schedules.value.filter((s) => {
+      if (s.status !== 'departed' || !s.actualDeparture) return false;
+      const dep = new Date(s.actualDeparture);
+      return dep >= today && dep < tomorrow;
+    }).length;
+  });
+
+  const conflictShipCount = computed(() => {
+    const scheduleIds = new Set(conflicts.value.map((c) => c.scheduleId));
+    return scheduleIds.size;
+  });
+
+  const overtimeOperationsCount = computed(() => {
+    const now = new Date();
+    return schedules.value.filter((s) => {
+      if (s.status === 'departed') return false;
+      if (s.status !== 'loading' && s.status !== 'unloading' && s.status !== 'berthing') {
+        return false;
+      }
+      const etd = new Date(s.etd);
+      const threshold = (s.delayThresholdMinutes ?? DEFAULT_DELAY_THRESHOLD) * 60000;
+      return now.getTime() > etd.getTime() + threshold;
+    }).length;
+  });
+
+  const berthTurnoverRate = computed(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today.getTime() + 24 * 3600 * 1000);
+    const completedToday = schedules.value.filter((s) => {
+      if (s.status !== 'departed' || !s.actualDeparture) return false;
+      const dep = new Date(s.actualDeparture);
+      return dep >= today && dep < tomorrow;
+    }).length;
+    const berthCount = sortedBerths.value.length || 1;
+    return Math.round((completedToday / berthCount) * 100) / 100;
+  });
+
   const schedulesByBerth = computed(() => {
     const map: Record<string, BerthSchedule[]> = {};
     sortedBerths.value.forEach((b) => {
@@ -502,6 +563,11 @@ export const useScheduleStore = defineStore('schedule', () => {
     shipsWaiting,
     berthUtilization,
     todayOperations,
+    avgWaitingMinutes,
+    todayDeparted,
+    conflictShipCount,
+    overtimeOperationsCount,
+    berthTurnoverRate,
     schedulesByBerth,
     sortedSchedules,
     setSelectedSchedule,

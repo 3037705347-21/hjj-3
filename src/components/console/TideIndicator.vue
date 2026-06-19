@@ -2,7 +2,7 @@
 import { computed } from 'vue';
 import { useScheduleStore } from '../../stores/schedule';
 import { format, differenceInHours, differenceInMinutes } from 'date-fns';
-import { Waves, ArrowUp, ArrowDown, TrendingUp, TrendingDown } from 'lucide-vue-next';
+import { Waves, ArrowUp, ArrowDown, TrendingUp, TrendingDown, Clock, Ship } from 'lucide-vue-next';
 
 const store = useScheduleStore();
 
@@ -30,6 +30,44 @@ const currentTide = computed(() => {
   });
   return closest;
 });
+
+interface KeyTideWindow {
+  time: Date;
+  height: number;
+  type: 'high' | 'low';
+}
+
+const keyTideWindows = computed<KeyTideWindow[]>(() => {
+  if (!hasData.value) return [];
+  const now = new Date();
+  return store.tides
+    .filter((t): t is KeyTideWindow => {
+      const diff = differenceInHours(t.time, now);
+      return diff >= 0 && diff <= 24 && (t.type === 'high' || t.type === 'low');
+    })
+    .slice(0, 6);
+});
+
+function getWindowLabel(type: 'high' | 'low') {
+  return type === 'high' ? '高潮窗' : '低潮窗';
+}
+
+function getWindowDescription(type: 'high' | 'low', height: number) {
+  if (type === 'high') {
+    if (height >= 4.5) return '大型深吃水船舶可通航';
+    if (height >= 3.5) return '中型船舶通航窗口';
+    return '小型船舶可通行';
+  }
+  if (height <= 2.0) return '需注意浅水区作业限制';
+  return '吃水受限船舶需评估';
+}
+
+function formatHoursFromNow(time: Date) {
+  const diff = differenceInHours(time, new Date());
+  if (diff === 0) return '即将到来';
+  if (diff === 1) return '1小时后';
+  return `${diff}小时后`;
+}
 
 const maxHeight = computed(() => {
   if (!hasData.value) return 5;
@@ -191,6 +229,60 @@ const typeIcon = {
       <span>最高: {{ maxHeight.toFixed(1) }}m</span>
       <span>最低: {{ minHeight.toFixed(1) }}m</span>
       <span>范围: 过去3小时 + 未来24小时</span>
+    </div>
+
+    <div v-if="keyTideWindows.length > 0" class="mt-3 pt-3 border-t border-console-500/20">
+      <div class="flex items-center gap-1.5 mb-2.5">
+        <Clock class="w-3.5 h-3.5 text-harbor-cyan" />
+        <h4 class="font-mono text-[11px] font-semibold text-console-100 tracking-wide">
+          未来 24 小时关键潮窗
+        </h4>
+      </div>
+      <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+        <div
+          v-for="tide in keyTideWindows"
+          :key="tide.time.toISOString()"
+          :class="[
+            'rounded-lg px-2.5 py-2 border transition-colors',
+            tide.type === 'high'
+              ? 'bg-harbor-orange/5 border-harbor-orange/20 hover:bg-harbor-orange/10'
+              : 'bg-harbor-cyan/5 border-harbor-cyan/20 hover:bg-harbor-cyan/10',
+          ]"
+        >
+          <div class="flex items-center justify-between mb-1">
+            <span
+              :class="[
+                'inline-flex items-center gap-1 font-mono text-[10px] font-semibold',
+                tide.type === 'high' ? 'text-harbor-orange' : 'text-harbor-cyan',
+              ]"
+            >
+              <ArrowUp v-if="tide.type === 'high'" :size="10" />
+              <ArrowDown v-else :size="10" />
+              {{ getWindowLabel(tide.type) }}
+            </span>
+            <span class="font-mono text-[10px] text-console-400">
+              {{ formatHoursFromNow(tide.time) }}
+            </span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span
+              :class="[
+                'font-mono text-sm font-bold',
+                tide.type === 'high' ? 'text-harbor-orange' : 'text-harbor-cyan',
+              ]"
+            >
+              {{ tide.height.toFixed(1) }}m
+            </span>
+            <span class="font-mono text-[10px] text-console-200">
+              {{ format(tide.time, 'HH:mm') }}
+            </span>
+          </div>
+          <p class="mt-1 font-mono text-[9px] text-console-400 leading-tight flex items-center gap-1">
+            <Ship :size="9" class="flex-shrink-0" />
+            {{ getWindowDescription(tide.type, tide.height) }}
+          </p>
+        </div>
+      </div>
     </div>
   </div>
 </template>

@@ -11,11 +11,27 @@ import LogPanel from '../components/logs/LogPanel.vue';
 import { Anchor, History, User, RefreshCw, Settings, Bell } from 'lucide-vue-next';
 import { format } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
+import type { ScheduleFilterCriteria, OperationStatus } from '../types';
+
+type StatKey =
+  | 'shipsInPort'
+  | 'shipsWaiting'
+  | 'utilization'
+  | 'operations'
+  | 'avgWaiting'
+  | 'todayDeparted'
+  | 'conflictShips'
+  | 'overtimeOps'
+  | 'turnover';
+
+type ExternalFilter = Partial<ScheduleFilterCriteria> & { __token?: number };
 
 const store = useScheduleStore();
 const router = useRouter();
 
 const currentTime = ref(new Date());
+const tableFilter = ref<ExternalFilter | undefined>(undefined);
+let filterToken = 0;
 
 onMounted(() => {
   setInterval(() => {
@@ -24,6 +40,59 @@ onMounted(() => {
 });
 
 const conflictCount = computed(() => store.conflicts.filter((c) => c.severity === 'error').length);
+
+function applyTableFilter(criteria: Partial<ScheduleFilterCriteria>) {
+  filterToken++;
+  tableFilter.value = { ...criteria, __token: filterToken };
+}
+
+function onStatCardClick(key: StatKey) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const tomorrow = new Date(today.getTime() + 24 * 3600 * 1000);
+  const todayStr = today.toISOString().slice(0, 16);
+  const tomorrowStr = tomorrow.toISOString().slice(0, 16);
+
+  switch (key) {
+    case 'shipsInPort':
+      applyTableFilter({ statusFilter: 'all' as OperationStatus | 'all' });
+      setTimeout(() => {
+        applyTableFilter({
+          statusFilter: 'all',
+          searchQuery: '',
+        });
+      }, 0);
+      break;
+    case 'shipsWaiting':
+      applyTableFilter({ statusFilter: 'anchored' });
+      break;
+    case 'utilization':
+      applyTableFilter({ statusFilter: 'all' });
+      break;
+    case 'operations':
+      applyTableFilter({
+        statusFilter: 'all',
+        etaStart: todayStr,
+        etaEnd: tomorrowStr,
+      });
+      break;
+    case 'avgWaiting':
+      applyTableFilter({ statusFilter: 'approaching' });
+      break;
+    case 'todayDeparted':
+      applyTableFilter({ statusFilter: 'departed' });
+      break;
+    case 'conflictShips':
+      applyTableFilter({ conflictFilter: 'has_conflict' });
+      break;
+    case 'overtimeOps':
+      router.push({ path: '/logs', query: { type: 'warning' } });
+      break;
+    case 'turnover':
+      applyTableFilter({ statusFilter: 'departed', etaStart: todayStr, etaEnd: tomorrowStr });
+      break;
+  }
+}
 </script>
 
 <template>
@@ -106,7 +175,7 @@ const conflictCount = computed(() => store.conflicts.filter((c) => c.severity ==
     </header>
 
     <main class="p-4 space-y-4">
-      <StatsCards />
+      <StatsCards @card-click="onStatCardClick" />
 
       <div class="grid grid-cols-12 gap-4">
         <div class="col-span-8 space-y-4">
@@ -121,7 +190,7 @@ const conflictCount = computed(() => store.conflicts.filter((c) => c.severity ==
           </div>
         </div>
         <div class="col-span-4 h-[640px]">
-          <ShipListTable />
+          <ShipListTable :external-filter="tableFilter" />
         </div>
       </div>
     </main>

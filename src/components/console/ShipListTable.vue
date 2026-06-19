@@ -39,6 +39,14 @@ import type {
   SavedView,
 } from '../../types';
 
+interface ExternalFilter extends Partial<ScheduleFilterCriteria> {
+  __token?: number;
+}
+
+const props = defineProps<{
+  externalFilter?: ExternalFilter;
+}>();
+
 const store = useScheduleStore();
 const searchQuery = ref('');
 const statusFilter = ref<OperationStatus | 'all'>('all');
@@ -71,6 +79,28 @@ const batchNewStatus = ref<OperationStatus>('anchored');
 const batchNewTeam = ref('');
 const batchRemarks = ref('');
 const batchAppendRemarks = ref(true);
+
+watch(
+  () => props.externalFilter,
+  (criteria) => {
+    if (!criteria) return;
+    if (criteria.searchQuery !== undefined) searchQuery.value = criteria.searchQuery;
+    if (criteria.statusFilter !== undefined) statusFilter.value = criteria.statusFilter;
+    if (criteria.priorityFilter !== undefined) priorityFilter.value = criteria.priorityFilter;
+    if (criteria.cargoTypeFilter !== undefined) cargoTypeFilter.value = criteria.cargoTypeFilter;
+    if (criteria.berthFilter !== undefined) berthFilter.value = criteria.berthFilter;
+    if (criteria.conflictFilter !== undefined) conflictFilter.value = criteria.conflictFilter;
+    if (criteria.teamFilter !== undefined) teamFilter.value = criteria.teamFilter;
+    if (criteria.etaStart !== undefined) etaStart.value = criteria.etaStart;
+    if (criteria.etaEnd !== undefined) etaEnd.value = criteria.etaEnd;
+    if (criteria.progressMin !== undefined) progressMin.value = criteria.progressMin;
+    if (criteria.progressMax !== undefined) progressMax.value = criteria.progressMax;
+    if (criteria.conflictFilter !== undefined || criteria.statusFilter !== undefined) {
+      showAdvancedFilter.value = true;
+    }
+  },
+  { deep: true, immediate: true },
+);
 
 const showSaveViewModal = ref(false);
 const showViewList = ref(false);
