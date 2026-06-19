@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useRouter } from 'vue-router';
+import { useRouter, useRoute } from 'vue-router';
 import { useScheduleStore } from '../stores/schedule';
 import { useAuthStore } from '../stores/auth';
 import { USER_ROLE_LABELS } from '../types';
@@ -21,6 +21,10 @@ import {
   Shield,
   Users,
   ClipboardCheck,
+  BarChart3,
+  CalendarDays,
+  CalendarRange,
+  Download,
 } from 'lucide-vue-next';
 import { format } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
@@ -31,6 +35,7 @@ const store = useScheduleStore();
 const authStore = useAuthStore();
 const approvalStore = useApprovalStore();
 const router = useRouter();
+const route = useRoute();
 const currentTime = ref(new Date());
 
 onMounted(() => {
@@ -105,6 +110,41 @@ const auditStats = computed(() => [
               class="px-3 py-1.5 rounded text-xs font-mono font-medium bg-harbor-cyan/15 text-harbor-cyan border border-harbor-cyan/30 shadow-glow-blue"
             >
               调度日志
+            </button>
+            <button
+              @click="router.push('/reports/daily')"
+              :class="['px-3 py-1.5 rounded text-xs font-mono font-medium transition-all flex items-center gap-1.5', route.path.startsWith('/reports') ? 'bg-harbor-cyan/15 text-harbor-cyan border border-harbor-cyan/30 shadow-glow-blue' : 'text-console-300 border border-console-500/30 hover:bg-console-700/50 hover:text-console-100']"
+            >
+              <BarChart3 class="w-3.5 h-3.5" />
+              日报
+            </button>
+            <button
+              @click="router.push('/reports/weekly')"
+              :class="['px-3 py-1.5 rounded text-xs font-mono font-medium transition-all flex items-center gap-1.5', route.path.startsWith('/reports') ? 'bg-harbor-cyan/15 text-harbor-cyan border border-harbor-cyan/30 shadow-glow-blue' : 'text-console-300 border border-console-500/30 hover:bg-console-700/50 hover:text-console-100']"
+            >
+              <CalendarDays class="w-3.5 h-3.5" />
+              周报
+            </button>
+            <button
+              @click="router.push('/reports/monthly')"
+              :class="['px-3 py-1.5 rounded text-xs font-mono font-medium transition-all flex items-center gap-1.5', route.path.startsWith('/reports') ? 'bg-harbor-cyan/15 text-harbor-cyan border border-harbor-cyan/30 shadow-glow-blue' : 'text-console-300 border border-console-500/30 hover:bg-console-700/50 hover:text-console-100']"
+            >
+              <CalendarRange class="w-3.5 h-3.5" />
+              月报
+            </button>
+            <button
+              @click="router.push('/reports/trends')"
+              :class="['px-3 py-1.5 rounded text-xs font-mono font-medium transition-all flex items-center gap-1.5', route.path.startsWith('/reports') ? 'bg-harbor-cyan/15 text-harbor-cyan border border-harbor-cyan/30 shadow-glow-blue' : 'text-console-300 border border-console-500/30 hover:bg-console-700/50 hover:text-console-100']"
+            >
+              <TrendingUp class="w-3.5 h-3.5" />
+              趋势
+            </button>
+            <button
+              @click="router.push('/reports/export')"
+              :class="['px-3 py-1.5 rounded text-xs font-mono font-medium transition-all flex items-center gap-1.5', route.path.startsWith('/reports') ? 'bg-harbor-cyan/15 text-harbor-cyan border border-harbor-cyan/30 shadow-glow-blue' : 'text-console-300 border border-console-500/30 hover:bg-console-700/50 hover:text-console-100']"
+            >
+              <Download class="w-3.5 h-3.5" />
+              导出
             </button>
             <button
               @click="router.push('/approval')"

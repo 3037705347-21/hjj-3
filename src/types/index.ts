@@ -628,3 +628,164 @@ export const EXTERNAL_PERMISSION_MODULE_LABELS: Record<ExternalPermissionModule,
   external_schedule_sync: '外部船期同步',
   external_import_view: '导入记录查看',
 };
+
+export type ReportGranularity = 'daily' | 'weekly' | 'monthly';
+
+export const REPORT_GRANULARITY_LABELS: Record<ReportGranularity, string> = {
+  daily: '日报',
+  weekly: '周报',
+  monthly: '月报',
+};
+
+export type AbnormalReasonCategory =
+  | 'weather'
+  | 'equipment_failure'
+  | 'tide_window'
+  | 'ship_delay'
+  | 'labor_shortage'
+  | 'cargo_issue'
+  | 'berth_maintenance'
+  | 'other';
+
+export const ABNORMAL_REASON_CATEGORY_LABELS: Record<AbnormalReasonCategory, string> = {
+  weather: '天气因素',
+  equipment_failure: '设备故障',
+  tide_window: '潮汐窗口',
+  ship_delay: '船舶延误',
+  labor_shortage: '人力不足',
+  cargo_issue: '货物问题',
+  berth_maintenance: '泊位维护',
+  other: '其他原因',
+};
+
+export interface ReportFilterCriteria {
+  startDate: string | null;
+  endDate: string | null;
+  berthIds: string[];
+  cargoTypes: CargoType[];
+  priorities: ShipPriority[];
+  operationTeams: string[];
+}
+
+export interface CoreMetrics {
+  shipsInPort: number;
+  shipsWaiting: number;
+  avgWaitingMinutes: number;
+  berthUtilization: number;
+  planFulfillmentRate: number;
+  conflictCount: number;
+  todayOperations: number;
+  todayDeparted: number;
+  turnoverRate: number;
+  criticalShipsGuaranteed: number;
+  criticalShipsTotal: number;
+}
+
+export interface AbnormalReasonDistribution {
+  category: AbnormalReasonCategory;
+  count: number;
+  percentage: number;
+}
+
+export interface TeamEfficiency {
+  teamName: string;
+  completedOperations: number;
+  totalCargoHandled: number;
+  avgOperationHours: number;
+  delayRate: number;
+  efficiencyScore: number;
+}
+
+export interface BerthPerformance {
+  berthId: string;
+  berthName: string;
+  utilization: number;
+  operationsCount: number;
+  avgTurnaroundHours: number;
+  conflictCount: number;
+}
+
+export interface KeyShipRecord {
+  scheduleId: string;
+  shipId: string;
+  shipName: string;
+  priority: ShipPriority;
+  berthName: string;
+  plannedBerthing: Date;
+  actualBerthing?: Date;
+  plannedDeparture: Date;
+  actualDeparture?: Date;
+  onTime: boolean;
+  guaranteeStatus: 'guaranteed' | 'delayed' | 'pending';
+  remarks?: string;
+}
+
+export interface DailyReportData {
+  date: Date;
+  metrics: CoreMetrics;
+  abnormalReasons: AbnormalReasonDistribution[];
+  teamEfficiencies: TeamEfficiency[];
+  berthPerformances: BerthPerformance[];
+  keyShips: KeyShipRecord[];
+}
+
+export interface WeeklyReportData {
+  weekStart: Date;
+  weekEnd: Date;
+  weeklyMetrics: CoreMetrics;
+  dailyBreakdown: { date: Date; metrics: CoreMetrics }[];
+  abnormalTrend: { category: AbnormalReasonCategory; dailyCounts: { date: Date; count: number }[] }[];
+  teamRanking: TeamEfficiency[];
+  berthRanking: BerthPerformance[];
+  keyShipsSummary: KeyShipRecord[];
+  weekOverWeekChange: Partial<Record<keyof CoreMetrics, number>>;
+}
+
+export interface MonthlyReportData {
+  month: Date;
+  monthlyMetrics: CoreMetrics;
+  weeklyBreakdown: { weekStart: Date; metrics: CoreMetrics }[];
+  abnormalTrend: AbnormalReasonDistribution[];
+  teamMonthlySummary: TeamEfficiency[];
+  berthMonthlySummary: BerthPerformance[];
+  monthOverMonthChange: Partial<Record<keyof CoreMetrics, number>>;
+  topIssues: { title: string; count: number; impact: string }[];
+}
+
+export interface TrendDataPoint {
+  date: Date;
+  value: number;
+}
+
+export interface MetricTrend {
+  metricKey: keyof CoreMetrics;
+  metricLabel: string;
+  dataPoints: TrendDataPoint[];
+  unit?: string;
+}
+
+export interface ExportConfig {
+  id: string;
+  name: string;
+  description: string;
+  granularity: ReportGranularity;
+  startDate: Date;
+  endDate: Date;
+  includeMetrics: (keyof CoreMetrics)[];
+  includeAbnormalReasons: boolean;
+  includeTeamEfficiency: boolean;
+  includeBerthPerformance: boolean;
+  includeKeyShips: boolean;
+  format: 'excel' | 'pdf' | 'csv' | 'json';
+  createdAt: Date;
+  createdBy: string;
+  snapshotData?: DailyReportData | WeeklyReportData | MonthlyReportData;
+}
+
+export type ReportPermissionModule = 'report_view' | 'report_export' | 'report_config';
+
+export const REPORT_PERMISSION_MODULE_LABELS: Record<ReportPermissionModule, string> = {
+  report_view: '报表查看',
+  report_export: '报表导出',
+  report_config: '导出配置',
+};

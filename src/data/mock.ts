@@ -4,7 +4,11 @@ import type {
   BerthSchedule,
   TideRecord,
   ScheduleLog,
+  ScheduleConflict,
   OperationMilestone,
+  OperationStatus,
+  ScheduleSource,
+  LogType,
   SystemUser,
   Role,
   AuditLog,
@@ -17,6 +21,7 @@ import type {
   ExternalVesselSchedule,
   ExternalImportRecord,
   ExternalSyncLog,
+  ShipPriority,
 } from '../types';
 
 const now = new Date();
@@ -1944,3 +1949,176 @@ export const mockExternalSyncLogs: ExternalSyncLog[] = [
     after: { syncStatus: 'synced', confirmedBy: '王芳' },
   },
 ];
+
+const HISTORY_DAYS = 30;
+const TEAMS = ['A班组', 'B班组', 'C班组', 'D班组', 'E班组'];
+const OPERATORS = ['张伟', '李明', '王芳', '陈强', '赵六'];
+const DELAY_REASONS: Record<string, string> = {
+  weather: '天气恶劣，作业暂停',
+  equipment_failure: '设备故障，等待维修',
+  tide_window: '潮汐窗口不符，等待高潮位',
+  ship_delay: '船舶到港延误',
+  labor_shortage: '作业班组人员不足',
+  cargo_issue: '货物异常，待处理',
+  berth_maintenance: '泊位临时维护',
+  other: '其他原因',
+};
+
+function seededRandom(seed: number) {
+  let s = seed;
+  return () => {
+    s = (s * 9301 + 49297) % 233280;
+    return s / 233280;
+  };
+}
+
+export interface HistoricalSchedule extends BerthSchedule {
+  historicalDate: Date;
+  priority?: ShipPriority;
+}
+
+export interface HistoricalLog extends ScheduleLog {
+  historicalDate: Date;
+}
+
+export interface HistoricalConflict extends ScheduleConflict {
+  historicalDate: Date;
+}
+
+export function generateHistoricalData(days: number = HISTORY_DAYS) {
+  const schedules: HistoricalSchedule[] = [];
+  const logs: HistoricalLog[] = [];
+  const conflicts: HistoricalConflict[] = [];
+  const rand = seededRandom(42);
+
+  for (let dayOffset = days; dayOffset >= 1; dayOffset--) {
+    const dayBase = new Date();
+    dayBase.setHours(0, 0, 0, 0);
+    dayBase.setDate(dayBase.getDate() - dayOffset);
+    const daySeed = dayOffset * 1000;
+
+    const shipsPerDay = 5 + Math.floor(rand() * 6);
+    for (let i = 0; i < shipsPerDay; i++) {
+      const shipIdx = Math.floor(rand() * mockShips.length);
+      const ship = mockShips[shipIdx];
+      const berthIdx = Math.floor(rand() * mockBerths.length);
+      const berth = mockBerths[berthIdx];
+      const startHour = Math.floor(rand() * 20);
+      const duration = 12 + Math.floor(rand() * 36);
+      const eta = new Date(dayBase.getTime() + startHour * 3600 * 1000);
+      const etd = new Date(eta.getTime() + duration * 3600 * 1000);
+
+      const isWeekend = dayBase.getDay() === 0 || dayBase.getDay() === 6;
+      const delayChance = isWeekend ? 0.45 : 0.3;
+      const hasDelay = rand() < delayChance;
+      const delayHours = hasDelay ? Math.floor(rand() * 8) : 0;
+      const actualBerthing = new Date(eta.getTime() + delayHours * 3600 * 1000 + Math.floor(rand() * 60) * 60 * 1000);
+      const actualDeparture = new Date(etd.getTime() + delayHours * 3600 * 1000 + Math.floor(rand() * 120) * 60 * 1000);
+      const actualOpStart = new Date(actualBerthing.getTime() + Math.floor(rand() * 60 + 30) * 60 * 1000);
+      const actualOpEnd = new Date(actualDeparture.getTime() - Math.floor(rand() * 60 + 30) * 60 * 1000);
+
+      let status: OperationStatus = 'departed';
+      const isToday = dayOffset === 0;
+      if (isToday) {
+        const now = new Date();
+        if (now < eta) status = 'anchored';
+        else if (now < actualBerthing) status = 'approaching';
+        else if (now < actualOpStart) status = 'berthing';
+        else if (now < actualOpEnd) status = rand() > 0.5 ? 'loading' : 'unloading';
+        else if (now < actualDeparture) status = 'departing';
+      }
+
+      const operationProgress = status === 'departed' ? 100
+        : status === 'departing' ? 95
+        : status === 'loading' || status === 'unloading'
+          ? Math.min(95, 30 + Math.floor(((now.getTime() - actualOpStart.getTime()) / (actualOpEnd.getTime() - actualOpStart.getTime())) * 60))
+          : status === 'berthing' ? 15
+          : status === 'approaching' ? 5
+          : 0;
+
+      const sched: HistoricalSchedule = {
+        id: `hist-sched-${dayOffset}-${i}`,
+        shipId: ship.id,
+        berthId: berth.id,
+        eta,
+        etd,
+        actualBerthing: status !== 'anchored' && status !== 'approaching' ? actualBerthing : undefined,
+        actualDeparture: status === 'departed' ? actualDeparture : undefined,
+        actualOperationStart: status === 'loading' || status === 'unloading' || status === 'departing' || status === 'departed' ? actualOpStart : undefined,
+        actualOperationEnd: status === 'departing' || status === 'departed' ? actualOpEnd : undefined,
+        status,
+        operationProgress,
+        progressMode: rand() > 0.5 ? 'milestone' : 'percentage',
+        cargoCompleted: status === 'departed' ? ship.cargoWeight : Math.floor(ship.cargoWeight * operationProgress / 100),
+        operationTeam: TEAMS[Math.floor(rand() * TEAMS.length)],
+        source: (['manual', 'import', 'auto', 'api'] as ScheduleSource[])[Math.floor(rand() * 4)],
+        delayReason: hasDelay ? Object.values(DELAY_REASONS)[Math.floor(rand() * Object.keys(DELAY_REASONS).length)] : undefined,
+        estimatedDuration: duration,
+        delayThresholdMinutes: 30,
+        priority: ship.priority,
+        historicalDate: dayBase,
+      };
+
+      schedules.push(sched);
+
+      const logCount = 2 + Math.floor(rand() * 4);
+      for (let l = 0; l < logCount; l++) {
+        const logTypes: LogType[] = ['create', 'update', 'status_change', 'warning', 'conflict'];
+        const logType = logTypes[Math.floor(rand() * logTypes.length)];
+        logs.push({
+          id: `hist-log-${dayOffset}-${i}-${l}`,
+          timestamp: new Date(eta.getTime() + l * Math.floor(rand() * 6) * 3600 * 1000),
+          type: logType,
+          operator: OPERATORS[Math.floor(rand() * OPERATORS.length)],
+          scheduleId: sched.id,
+          shipId: ship.id,
+          berthId: berth.id,
+          description: logType === 'create'
+            ? `创建调度计划：${ship.name} 靠泊 ${berth.name}`
+            : logType === 'status_change'
+              ? `${ship.name} 状态变更为 ${status}`
+              : logType === 'conflict'
+                ? `检测到${['时间', '吃水', '长度', '货种'][Math.floor(rand() * 4)]}冲突`
+                : logType === 'warning' && sched.delayReason
+                  ? sched.delayReason
+                  : `更新调度计划：${ship.name}`,
+          historicalDate: dayBase,
+        });
+      }
+
+      const conflictChance = isWeekend ? 0.35 : 0.2;
+      if (rand() < conflictChance) {
+        const conflictTypes: ScheduleConflict['type'][] = [
+          'time_overlap', 'draft_exceed', 'length_exceed', 'cargo_mismatch',
+          'tide_window', 'buffer_time_insufficient', 'team_conflict',
+        ];
+        const cType = conflictTypes[Math.floor(rand() * conflictTypes.length)];
+        conflicts.push({
+          id: `hist-conflict-${dayOffset}-${i}`,
+          type: cType,
+          severity: rand() > 0.7 ? 'error' : 'warning',
+          scheduleId: sched.id,
+          relatedScheduleId: i > 0 ? `hist-sched-${dayOffset}-${i - 1}` : undefined,
+          message: `${ship.name} 存在${{
+            time_overlap: '时间重叠',
+            draft_exceed: '吃水超限',
+            length_exceed: '长度超限',
+            cargo_mismatch: '货种不匹配',
+            tide_window: '潮汐窗口',
+            buffer_time_insufficient: '缓冲时间不足',
+            team_conflict: '班组冲突',
+            berth_maintenance: '泊位维护',
+            night_operation_limit: '夜间作业限制',
+            dangerous_cargo_isolation: '危险品隔离',
+          }[cType]}冲突`,
+          suggestedAction: '建议调整时间窗口或更换泊位',
+          historicalDate: dayBase,
+        });
+      }
+    }
+  }
+
+  return { schedules, logs, conflicts };
+}
+
+export const historicalData = generateHistoricalData();

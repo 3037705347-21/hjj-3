@@ -1,35 +1,20 @@
 <script setup lang="ts">
 import { useRouter, useRoute } from 'vue-router';
-import { computed, onMounted, ref } from 'vue';
-import { useScheduleStore } from '../stores/schedule';
-import { useAuthStore } from '../stores/auth';
-import { USER_ROLE_LABELS } from '../types';
-import StatsCards from '../components/console/StatsCards.vue';
-import BerthTimeline from '../components/console/BerthTimeline.vue';
-import ShipListTable from '../components/console/ShipListTable.vue';
-import TideIndicator from '../components/console/TideIndicator.vue';
-import ShipDetailSidebar from '../components/sidebar/ShipDetailSidebar.vue';
-import LogPanel from '../components/logs/LogPanel.vue';
-import { Anchor, History, User, RefreshCw, Settings, Bell, Shield, Users, ClipboardCheck, Layers, AlertTriangle, BarChart3, CalendarDays, CalendarRange, TrendingUp, Download } from 'lucide-vue-next';
+import { useScheduleStore } from '../../stores/schedule';
+import { useAuthStore } from '../../stores/auth';
+import { USER_ROLE_LABELS } from '../../types';
+import { Anchor, LayoutDashboard, History, User, RefreshCw, Settings, Bell, Shield, Users, ClipboardCheck, Layers, AlertTriangle, BarChart3, CalendarDays, CalendarRange, TrendingUp, Download } from 'lucide-vue-next';
 import { format } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
-import type { ScheduleFilterCriteria, OperationStatus } from '../types';
-import { useApprovalStore } from '../stores/approval';
-import { useResourceStore } from '../stores/resource';
-import { useIncidentStore } from '../stores/incident';
+import { computed, onMounted, ref } from 'vue';
+import { useApprovalStore } from '../../stores/approval';
+import { useResourceStore } from '../../stores/resource';
+import { useIncidentStore } from '../../stores/incident';
 
-type StatKey =
-  | 'shipsInPort'
-  | 'shipsWaiting'
-  | 'utilization'
-  | 'operations'
-  | 'avgWaiting'
-  | 'todayDeparted'
-  | 'conflictShips'
-  | 'overtimeOps'
-  | 'turnover';
-
-type ExternalFilter = Partial<ScheduleFilterCriteria> & { __token?: number };
+defineProps<{
+  title: string;
+  subtitle?: string;
+}>();
 
 const store = useScheduleStore();
 const authStore = useAuthStore();
@@ -38,10 +23,7 @@ const resourceStore = useResourceStore();
 const incidentStore = useIncidentStore();
 const router = useRouter();
 const route = useRoute();
-
 const currentTime = ref(new Date());
-const tableFilter = ref<ExternalFilter | undefined>(undefined);
-let filterToken = 0;
 
 onMounted(() => {
   setInterval(() => {
@@ -53,64 +35,8 @@ const conflictCount = computed(() =>
   store.conflicts.filter((c) => c.severity === 'error').length + resourceStore.activeConflicts.length,
 );
 
-const activeIncidentCount = computed(() =>
-  incidentStore.activeIncidents.length,
-);
-
+const activeIncidentCount = computed(() => incidentStore.activeIncidents.length);
 const totalAlertCount = computed(() => conflictCount.value + activeIncidentCount.value);
-
-function applyTableFilter(criteria: Partial<ScheduleFilterCriteria>) {
-  filterToken++;
-  tableFilter.value = { ...criteria, __token: filterToken };
-}
-
-function onStatCardClick(key: StatKey) {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const tomorrow = new Date(today.getTime() + 24 * 3600 * 1000);
-  const todayStr = today.toISOString().slice(0, 16);
-  const tomorrowStr = tomorrow.toISOString().slice(0, 16);
-
-  switch (key) {
-    case 'shipsInPort':
-      applyTableFilter({ statusFilter: 'all' as OperationStatus | 'all' });
-      setTimeout(() => {
-        applyTableFilter({
-          statusFilter: 'all',
-          searchQuery: '',
-        });
-      }, 0);
-      break;
-    case 'shipsWaiting':
-      applyTableFilter({ statusFilter: 'anchored' });
-      break;
-    case 'utilization':
-      applyTableFilter({ statusFilter: 'all' });
-      break;
-    case 'operations':
-      applyTableFilter({
-        statusFilter: 'all',
-        etaStart: todayStr,
-        etaEnd: tomorrowStr,
-      });
-      break;
-    case 'avgWaiting':
-      applyTableFilter({ statusFilter: 'approaching' });
-      break;
-    case 'todayDeparted':
-      applyTableFilter({ statusFilter: 'departed' });
-      break;
-    case 'conflictShips':
-      applyTableFilter({ conflictFilter: 'has_conflict' });
-      break;
-    case 'overtimeOps':
-      router.push({ path: '/logs', query: { type: 'warning' } });
-      break;
-    case 'turnover':
-      applyTableFilter({ statusFilter: 'departed', etaStart: todayStr, etaEnd: tomorrowStr });
-      break;
-  }
-}
 </script>
 
 <template>
@@ -135,8 +61,9 @@ function onStatCardClick(key: StatKey) {
           <nav class="flex items-center gap-1">
             <button
               @click="router.push('/')"
-              class="px-3 py-1.5 rounded text-xs font-mono font-medium bg-harbor-cyan/15 text-harbor-cyan border border-harbor-cyan/30 shadow-glow-blue"
+              class="px-3 py-1.5 rounded text-xs font-mono font-medium text-console-300 border border-console-500/30 hover:bg-console-700/50 hover:text-console-100 transition-all flex items-center gap-1.5"
             >
+              <LayoutDashboard class="w-3.5 h-3.5" />
               运营控制台
             </button>
             <button
@@ -148,35 +75,35 @@ function onStatCardClick(key: StatKey) {
             </button>
             <button
               @click="router.push('/reports/daily')"
-              :class="['px-3 py-1.5 rounded text-xs font-mono font-medium transition-all flex items-center gap-1.5', route.path.startsWith('/reports') ? 'bg-harbor-cyan/15 text-harbor-cyan border border-harbor-cyan/30 shadow-glow-blue' : 'text-console-300 border border-console-500/30 hover:bg-console-700/50 hover:text-console-100']"
+              :class="['px-3 py-1.5 rounded text-xs font-mono font-medium transition-all flex items-center gap-1.5', route.name === 'report-daily' ? 'bg-harbor-cyan/15 text-harbor-cyan border border-harbor-cyan/30 shadow-glow-blue' : 'text-console-300 border border-console-500/30 hover:bg-console-700/50 hover:text-console-100']"
             >
               <BarChart3 class="w-3.5 h-3.5" />
               日报
             </button>
             <button
               @click="router.push('/reports/weekly')"
-              :class="['px-3 py-1.5 rounded text-xs font-mono font-medium transition-all flex items-center gap-1.5', route.path.startsWith('/reports') ? 'bg-harbor-cyan/15 text-harbor-cyan border border-harbor-cyan/30 shadow-glow-blue' : 'text-console-300 border border-console-500/30 hover:bg-console-700/50 hover:text-console-100']"
+              :class="['px-3 py-1.5 rounded text-xs font-mono font-medium transition-all flex items-center gap-1.5', route.name === 'report-weekly' ? 'bg-harbor-cyan/15 text-harbor-cyan border border-harbor-cyan/30 shadow-glow-blue' : 'text-console-300 border border-console-500/30 hover:bg-console-700/50 hover:text-console-100']"
             >
               <CalendarDays class="w-3.5 h-3.5" />
               周报
             </button>
             <button
               @click="router.push('/reports/monthly')"
-              :class="['px-3 py-1.5 rounded text-xs font-mono font-medium transition-all flex items-center gap-1.5', route.path.startsWith('/reports') ? 'bg-harbor-cyan/15 text-harbor-cyan border border-harbor-cyan/30 shadow-glow-blue' : 'text-console-300 border border-console-500/30 hover:bg-console-700/50 hover:text-console-100']"
+              :class="['px-3 py-1.5 rounded text-xs font-mono font-medium transition-all flex items-center gap-1.5', route.name === 'report-monthly' ? 'bg-harbor-cyan/15 text-harbor-cyan border border-harbor-cyan/30 shadow-glow-blue' : 'text-console-300 border border-console-500/30 hover:bg-console-700/50 hover:text-console-100']"
             >
               <CalendarRange class="w-3.5 h-3.5" />
               月报
             </button>
             <button
               @click="router.push('/reports/trends')"
-              :class="['px-3 py-1.5 rounded text-xs font-mono font-medium transition-all flex items-center gap-1.5', route.path.startsWith('/reports') ? 'bg-harbor-cyan/15 text-harbor-cyan border border-harbor-cyan/30 shadow-glow-blue' : 'text-console-300 border border-console-500/30 hover:bg-console-700/50 hover:text-console-100']"
+              :class="['px-3 py-1.5 rounded text-xs font-mono font-medium transition-all flex items-center gap-1.5', route.name === 'report-trends' ? 'bg-harbor-cyan/15 text-harbor-cyan border border-harbor-cyan/30 shadow-glow-blue' : 'text-console-300 border border-console-500/30 hover:bg-console-700/50 hover:text-console-100']"
             >
               <TrendingUp class="w-3.5 h-3.5" />
               趋势
             </button>
             <button
               @click="router.push('/reports/export')"
-              :class="['px-3 py-1.5 rounded text-xs font-mono font-medium transition-all flex items-center gap-1.5', route.path.startsWith('/reports') ? 'bg-harbor-cyan/15 text-harbor-cyan border border-harbor-cyan/30 shadow-glow-blue' : 'text-console-300 border border-console-500/30 hover:bg-console-700/50 hover:text-console-100']"
+              :class="['px-3 py-1.5 rounded text-xs font-mono font-medium transition-all flex items-center gap-1.5', route.name === 'report-export' ? 'bg-harbor-cyan/15 text-harbor-cyan border border-harbor-cyan/30 shadow-glow-blue' : 'text-console-300 border border-console-500/30 hover:bg-console-700/50 hover:text-console-100']"
             >
               <Download class="w-3.5 h-3.5" />
               导出
@@ -251,7 +178,7 @@ function onStatCardClick(key: StatKey) {
 
           <div class="h-8 w-px bg-console-500/30" />
 
-          <button 
+          <button
             @click="router.push('/incidents')"
             class="relative w-9 h-9 rounded-lg bg-console-800/60 border border-console-500/40 flex items-center justify-center text-console-300 hover:text-harbor-cyan hover:border-harbor-cyan/40 transition-all"
           >
@@ -285,27 +212,21 @@ function onStatCardClick(key: StatKey) {
       </div>
     </header>
 
-    <main class="p-4 space-y-4">
-      <StatsCards @card-click="onStatCardClick" />
-
-      <div class="grid grid-cols-12 gap-4">
-        <div class="col-span-8 space-y-4">
-          <BerthTimeline />
-          <div class="grid grid-cols-3 gap-4">
-            <div class="col-span-2">
-              <TideIndicator />
-            </div>
-            <div class="h-48">
-              <LogPanel compact :limit="5" />
-            </div>
-          </div>
-        </div>
-        <div class="col-span-4 h-[640px]">
-          <ShipListTable :external-filter="tableFilter" />
+    <div class="px-6 pt-4 pb-2 border-b border-console-500/20">
+      <div class="flex items-center justify-between">
+        <div>
+          <h2 class="font-mono text-xl font-bold text-console-100 glow-text-cyan">
+            {{ title }}
+          </h2>
+          <p v-if="subtitle" class="text-xs font-mono text-console-400 mt-0.5">
+            {{ subtitle }}
+          </p>
         </div>
       </div>
-    </main>
+    </div>
 
-    <ShipDetailSidebar />
+    <main class="p-4 space-y-4">
+      <slot />
+    </main>
   </div>
 </template>

@@ -13,6 +13,36 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '运营控制台', requireAuth: true },
   },
   {
+    path: '/reports/daily',
+    name: 'report-daily',
+    component: () => import('@/pages/report/DailyReportPage.vue'),
+    meta: { title: '经营日报', requireAuth: true },
+  },
+  {
+    path: '/reports/weekly',
+    name: 'report-weekly',
+    component: () => import('@/pages/report/WeeklyReportPage.vue'),
+    meta: { title: '经营周报', requireAuth: true },
+  },
+  {
+    path: '/reports/monthly',
+    name: 'report-monthly',
+    component: () => import('@/pages/report/MonthlyReportPage.vue'),
+    meta: { title: '经营月报', requireAuth: true },
+  },
+  {
+    path: '/reports/trends',
+    name: 'report-trends',
+    component: () => import('@/pages/report/TrendAnalysisPage.vue'),
+    meta: { title: '指标趋势', requireAuth: true },
+  },
+  {
+    path: '/reports/export',
+    name: 'report-export',
+    component: () => import('@/pages/report/ExportConfigPage.vue'),
+    meta: { title: '导出配置', requireAuth: true },
+  },
+  {
     path: '/logs',
     name: 'logs',
     component: LogsPage,
