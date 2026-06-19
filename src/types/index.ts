@@ -449,3 +449,78 @@ export interface ResourceConflict {
 }
 
 export type ResourcePermissionModule = 'resource_manage' | 'resource_allocate';
+
+export type IncidentType = 'weather' | 'equipment_failure' | 'schedule_delay' | 'temporary_stop' | 'safety_event';
+
+export const INCIDENT_TYPE_LABELS: Record<IncidentType, string> = {
+  weather: '天气异常',
+  equipment_failure: '设备故障',
+  schedule_delay: '船期延误',
+  temporary_stop: '临时停工',
+  safety_event: '安全事件',
+};
+
+export type IncidentSeverity = 'critical' | 'major' | 'minor' | 'warning';
+
+export const INCIDENT_SEVERITY_LABELS: Record<IncidentSeverity, string> = {
+  critical: '特别重大',
+  major: '重大',
+  minor: '一般',
+  warning: '预警',
+};
+
+export type IncidentStatus = 'reported' | 'investigating' | 'handling' | 'resolved' | 'closed';
+
+export const INCIDENT_STATUS_LABELS: Record<IncidentStatus, string> = {
+  reported: '已上报',
+  investigating: '调查中',
+  handling: '处置中',
+  resolved: '已解决',
+  closed: '已关闭',
+};
+
+export interface AffectedSchedule {
+  scheduleId: string;
+  shipId: string;
+  shipName: string;
+  berthId: string;
+  berthName: string;
+  impact: string;
+  etaAdjusted?: Date;
+  etdAdjusted?: Date;
+  statusAdjusted?: OperationStatus;
+}
+
+export interface IncidentRecord {
+  id: string;
+  action: string;
+  operator: string;
+  timestamp: Date;
+  description: string;
+  attachmentUrls?: string[];
+}
+
+export interface Incident {
+  id: string;
+  incidentNo: string;
+  type: IncidentType;
+  severity: IncidentSeverity;
+  status: IncidentStatus;
+  title: string;
+  description: string;
+  occurTime: Date;
+  expectedRecoveryTime?: Date;
+  actualRecoveryTime?: Date;
+  affectedBerthIds: string[];
+  affectedShipIds: string[];
+  affectedSchedules: AffectedSchedule[];
+  handler?: string;
+  reporter: string;
+  reportTime: Date;
+  reviewConclusion?: string;
+  records: IncidentRecord[];
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export type IncidentPermissionModule = 'incident_manage' | 'incident_handle';

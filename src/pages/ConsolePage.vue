@@ -10,12 +10,13 @@ import ShipListTable from '../components/console/ShipListTable.vue';
 import TideIndicator from '../components/console/TideIndicator.vue';
 import ShipDetailSidebar from '../components/sidebar/ShipDetailSidebar.vue';
 import LogPanel from '../components/logs/LogPanel.vue';
-import { Anchor, History, User, RefreshCw, Settings, Bell, Shield, Users, ClipboardCheck, Layers } from 'lucide-vue-next';
+import { Anchor, History, User, RefreshCw, Settings, Bell, Shield, Users, ClipboardCheck, Layers, AlertTriangle } from 'lucide-vue-next';
 import { format } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
 import type { ScheduleFilterCriteria, OperationStatus } from '../types';
 import { useApprovalStore } from '../stores/approval';
 import { useResourceStore } from '../stores/resource';
+import { useIncidentStore } from '../stores/incident';
 
 type StatKey =
   | 'shipsInPort'
@@ -34,6 +35,7 @@ const store = useScheduleStore();
 const authStore = useAuthStore();
 const approvalStore = useApprovalStore();
 const resourceStore = useResourceStore();
+const incidentStore = useIncidentStore();
 const router = useRouter();
 
 const currentTime = ref(new Date());
@@ -49,6 +51,12 @@ onMounted(() => {
 const conflictCount = computed(() =>
   store.conflicts.filter((c) => c.severity === 'error').length + resourceStore.activeConflicts.length,
 );
+
+const activeIncidentCount = computed(() =>
+  incidentStore.activeIncidents.length,
+);
+
+const totalAlertCount = computed(() => conflictCount.value + activeIncidentCount.value);
 
 function applyTableFilter(criteria: Partial<ScheduleFilterCriteria>) {
   filterToken++;
@@ -164,6 +172,19 @@ function onStatCardClick(key: StatKey) {
               </span>
             </button>
             <button
+              @click="router.push('/incidents')"
+              class="px-3 py-1.5 rounded text-xs font-mono font-medium text-console-300 border border-console-500/30 hover:bg-console-700/50 hover:text-console-100 transition-all flex items-center gap-1.5 relative"
+            >
+              <AlertTriangle class="w-3.5 h-3.5" />
+              异常事件
+              <span
+                v-if="activeIncidentCount > 0"
+                class="ml-0.5 min-w-[16px] h-[16px] px-0.5 rounded-full bg-harbor-red text-white text-[8px] font-mono font-bold flex items-center justify-center animate-pulse-red"
+              >
+                {{ activeIncidentCount }}
+              </span>
+            </button>
+            <button
               v-if="authStore.canManageUsers"
               @click="router.push('/permission/users')"
               class="px-3 py-1.5 rounded text-xs font-mono font-medium text-console-300 border border-console-500/30 hover:bg-console-700/50 hover:text-console-100 transition-all flex items-center gap-1.5"
@@ -194,13 +215,16 @@ function onStatCardClick(key: StatKey) {
 
           <div class="h-8 w-px bg-console-500/30" />
 
-          <button class="relative w-9 h-9 rounded-lg bg-console-800/60 border border-console-500/40 flex items-center justify-center text-console-300 hover:text-harbor-cyan hover:border-harbor-cyan/40 transition-all">
+          <button 
+            @click="router.push('/incidents')"
+            class="relative w-9 h-9 rounded-lg bg-console-800/60 border border-console-500/40 flex items-center justify-center text-console-300 hover:text-harbor-cyan hover:border-harbor-cyan/40 transition-all"
+          >
             <Bell class="w-4 h-4" />
             <span
-              v-if="conflictCount > 0"
+              v-if="totalAlertCount > 0"
               class="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-harbor-red text-white text-[9px] font-mono font-bold flex items-center justify-center animate-pulse-red"
             >
-              {{ conflictCount }}
+              {{ totalAlertCount }}
             </span>
           </button>
 

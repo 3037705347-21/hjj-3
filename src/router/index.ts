@@ -78,6 +78,18 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/pages/approval/ApprovalDetailPage.vue'),
     meta: { title: '审批详情', requireAuth: true },
   },
+  {
+    path: '/incidents',
+    name: 'incident-list',
+    component: () => import('@/pages/incident/IncidentListPage.vue'),
+    meta: { title: '异常事件', requireAuth: true },
+  },
+  {
+    path: '/incidents/:id',
+    name: 'incident-detail',
+    component: () => import('@/pages/incident/IncidentDetailPage.vue'),
+    meta: { title: '事件详情', requireAuth: true },
+  },
 ];
 
 const router = createRouter({
