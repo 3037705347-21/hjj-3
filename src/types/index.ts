@@ -101,3 +101,24 @@ export interface ScheduleConflict {
   message: string;
   suggestedAction?: string;
 }
+
+export interface ScheduleFilterCriteria {
+  searchQuery: string;
+  statusFilter: OperationStatus | 'all';
+  priorityFilter: ShipPriority | 'all';
+  cargoTypeFilter: CargoType | 'all';
+  berthFilter: string | 'all';
+  conflictFilter: 'all' | 'has_conflict' | 'no_conflict';
+  teamFilter: string | 'all';
+  etaStart: string | null;
+  etaEnd: string | null;
+  progressMin: number | null;
+  progressMax: number | null;
+}
+
+export interface SavedView {
+  id: string;
+  name: string;
+  criteria: ScheduleFilterCriteria;
+  createdAt: Date;
+}

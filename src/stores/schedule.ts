@@ -260,6 +260,63 @@ export const useScheduleStore = defineStore('schedule', () => {
     return ships.value.filter((s) => !scheduledShipIds.has(s.id));
   }
 
+  function batchUpdateStatus(ids: string[], status: OperationStatus) {
+    ids.forEach((id) => {
+      updateScheduleStatus(id, status);
+    });
+  }
+
+  function batchAssignTeam(ids: string[], team: string) {
+    ids.forEach((id) => {
+      const schedule = schedules.value.find((s) => s.id === id);
+      if (!schedule) return;
+      const beforeTeam = schedule.operationTeam;
+      schedule.operationTeam = team;
+      addLog({
+        type: 'update',
+        scheduleId: id,
+        shipId: schedule.shipId,
+        description: beforeTeam
+          ? `作业班组由 ${beforeTeam} 变更为 ${team}`
+          : `分配作业班组: ${team}`,
+        before: { operationTeam: beforeTeam },
+        after: { operationTeam: team },
+      });
+    });
+  }
+
+  function batchAddRemarks(ids: string[], remarks: string, append = true) {
+    ids.forEach((id) => {
+      const schedule = schedules.value.find((s) => s.id === id);
+      if (!schedule) return;
+      const beforeRemarks = schedule.remarks;
+      const newRemarks = append && beforeRemarks
+        ? `${beforeRemarks}\n${remarks}`
+        : remarks;
+      schedule.remarks = newRemarks;
+      addLog({
+        type: 'update',
+        scheduleId: id,
+        shipId: schedule.shipId,
+        description: append ? '追加备注信息' : '更新备注信息',
+        before: { remarks: beforeRemarks },
+        after: { remarks: newRemarks },
+      });
+    });
+  }
+
+  function scheduleHasConflicts(scheduleId: string): boolean {
+    return conflicts.value.some((c) => c.scheduleId === scheduleId);
+  }
+
+  function getAllOperationTeams(): string[] {
+    const teams = new Set<string>();
+    schedules.value.forEach((s) => {
+      if (s.operationTeam) teams.add(s.operationTeam);
+    });
+    return Array.from(teams);
+  }
+
   return {
     ships,
     berths,
@@ -292,5 +349,10 @@ export const useScheduleStore = defineStore('schedule', () => {
     deleteSchedule,
     copySchedule,
     getAvailableShips,
+    batchUpdateStatus,
+    batchAssignTeam,
+    batchAddRemarks,
+    scheduleHasConflicts,
+    getAllOperationTeams,
   };
 });
