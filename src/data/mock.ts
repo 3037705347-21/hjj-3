@@ -232,6 +232,9 @@ export const mockSchedules: BerthSchedule[] = [
     operationProgress: 45,
     operationTeam: 'A班组',
     remarks: '危险品集装箱需优先处理',
+    source: 'manual',
+    priorityAdjustReason: '危险品优先作业',
+    estimatedDuration: 20,
   },
   {
     id: 'sched-002',
@@ -243,6 +246,8 @@ export const mockSchedules: BerthSchedule[] = [
     status: 'loading',
     operationProgress: 28,
     operationTeam: 'B班组',
+    source: 'import',
+    estimatedDuration: 19,
   },
   {
     id: 'sched-003',
@@ -255,6 +260,8 @@ export const mockSchedules: BerthSchedule[] = [
     operationProgress: 82,
     operationTeam: 'C班组',
     remarks: '铁矿砂卸载作业',
+    source: 'api',
+    estimatedDuration: 16,
   },
   {
     id: 'sched-004',
@@ -265,6 +272,8 @@ export const mockSchedules: BerthSchedule[] = [
     status: 'berthing',
     operationProgress: 5,
     operationTeam: 'D班组',
+    source: 'manual',
+    estimatedDuration: 42,
   },
   {
     id: 'sched-005',
@@ -274,6 +283,8 @@ export const mockSchedules: BerthSchedule[] = [
     etd: hoursLater(38),
     status: 'approaching',
     operationProgress: 0,
+    source: 'auto',
+    estimatedDuration: 24,
   },
   {
     id: 'sched-006',
@@ -283,6 +294,8 @@ export const mockSchedules: BerthSchedule[] = [
     etd: hoursLater(44),
     status: 'anchored',
     operationProgress: 0,
+    source: 'manual',
+    estimatedDuration: 26,
   },
   {
     id: 'sched-007',
@@ -292,6 +305,8 @@ export const mockSchedules: BerthSchedule[] = [
     etd: hoursLater(32),
     status: 'approaching',
     operationProgress: 0,
+    source: 'import',
+    estimatedDuration: 24,
   },
   {
     id: 'sched-008',
@@ -302,6 +317,9 @@ export const mockSchedules: BerthSchedule[] = [
     status: 'approaching',
     operationProgress: 0,
     operationTeam: 'A班组',
+    source: 'manual',
+    priorityAdjustReason: '客轮优先保障',
+    estimatedDuration: 18,
   },
   {
     id: 'sched-009',
@@ -311,6 +329,8 @@ export const mockSchedules: BerthSchedule[] = [
     etd: hoursLater(48),
     status: 'anchored',
     operationProgress: 0,
+    source: 'api',
+    estimatedDuration: 24,
   },
   {
     id: 'sched-010',
@@ -320,6 +340,8 @@ export const mockSchedules: BerthSchedule[] = [
     etd: hoursLater(72),
     status: 'anchored',
     operationProgress: 0,
+    source: 'manual',
+    estimatedDuration: 32,
   },
 ];
 

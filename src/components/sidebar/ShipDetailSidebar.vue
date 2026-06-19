@@ -1,14 +1,19 @@
 <script setup lang="ts">
 import { useScheduleStore } from '../../stores/schedule';
-import { X, ChevronRight } from 'lucide-vue-next';
+import { X, ChevronRight, Pencil, Copy, Trash2 } from 'lucide-vue-next';
 import ShipInfoCard from './ShipInfoCard.vue';
 import OperationProgress from './OperationProgress.vue';
 import StatusActions from './StatusActions.vue';
 import StatusBadge from '../common/StatusBadge.vue';
 import ConflictAlert from '../logs/ConflictAlert.vue';
-import { computed } from 'vue';
+import ScheduleEditDrawer from '../common/ScheduleEditDrawer.vue';
+import { computed, ref } from 'vue';
+import type { BerthSchedule } from '../../types';
 
 const store = useScheduleStore();
+
+const showEditDrawer = ref(false);
+const showDeleteConfirm = ref(false);
 
 const scheduleConflicts = computed(() =>
   store.conflicts.filter(
@@ -20,6 +25,32 @@ const scheduleConflicts = computed(() =>
 
 function closeSidebar() {
   store.setSelectedSchedule(null);
+}
+
+function openEdit() {
+  showEditDrawer.value = true;
+}
+
+function handleCopy() {
+  if (!store.selectedScheduleId) return;
+  const newSched = store.copySchedule(store.selectedScheduleId);
+  if (newSched) {
+    store.setSelectedSchedule(newSched.id);
+  }
+}
+
+function confirmDelete() {
+  showDeleteConfirm.value = true;
+}
+
+function doDelete() {
+  if (!store.selectedScheduleId) return;
+  store.deleteSchedule(store.selectedScheduleId);
+  showDeleteConfirm.value = false;
+}
+
+function handleSaved(schedule: BerthSchedule) {
+  store.setSelectedSchedule(schedule.id);
 }
 </script>
 
@@ -36,12 +67,36 @@ function closeSidebar() {
             船舶调度详情
           </h2>
         </div>
-        <button
-          @click="closeSidebar"
-          class="w-8 h-8 flex items-center justify-center rounded border border-console-500/40 text-console-300 hover:text-harbor-red hover:border-harbor-red/50 hover:bg-harbor-red/10 transition-all"
-        >
-          <X class="w-4 h-4" />
-        </button>
+        <div class="flex items-center gap-1">
+          <button
+            @click.stop="openEdit"
+            class="w-8 h-8 flex items-center justify-center rounded border border-console-500/40 text-console-300 hover:text-harbor-cyan hover:border-harbor-cyan/50 hover:bg-harbor-cyan/10 transition-all"
+            title="编辑计划"
+          >
+            <Pencil class="w-4 h-4" />
+          </button>
+          <button
+            @click.stop="handleCopy"
+            class="w-8 h-8 flex items-center justify-center rounded border border-console-500/40 text-console-300 hover:text-harbor-orange hover:border-harbor-orange/50 hover:bg-harbor-orange/10 transition-all"
+            title="复制计划"
+          >
+            <Copy class="w-4 h-4" />
+          </button>
+          <button
+            @click.stop="confirmDelete"
+            class="w-8 h-8 flex items-center justify-center rounded border border-console-500/40 text-console-300 hover:text-harbor-red hover:border-harbor-red/50 hover:bg-harbor-red/10 transition-all"
+            title="删除计划"
+          >
+            <Trash2 class="w-4 h-4" />
+          </button>
+          <div class="w-px h-5 bg-console-500/40 mx-1" />
+          <button
+            @click="closeSidebar"
+            class="w-8 h-8 flex items-center justify-center rounded border border-console-500/40 text-console-300 hover:text-harbor-red hover:border-harbor-red/50 hover:bg-harbor-red/10 transition-all"
+          >
+            <X class="w-4 h-4" />
+          </button>
+        </div>
       </div>
 
       <div class="flex-1 overflow-y-auto p-4 space-y-4">
@@ -66,6 +121,63 @@ function closeSidebar() {
 
         <StatusActions :schedule="store.selectedSchedule" />
       </div>
+
+      <ScheduleEditDrawer
+        :visible="showEditDrawer"
+        mode="edit"
+        :schedule-id="store.selectedScheduleId || undefined"
+        @close="showEditDrawer = false"
+        @saved="handleSaved"
+      />
+
+      <Teleport to="body">
+        <Transition name="fade">
+          <div
+            v-if="showDeleteConfirm"
+            class="fixed inset-0 z-[200] flex items-center justify-center"
+          >
+            <div
+              class="absolute inset-0 bg-black/60 backdrop-blur-sm"
+              @click="showDeleteConfirm = false"
+            />
+            <div class="relative w-full max-w-sm mx-4 bg-console-900 border border-harbor-red/40 rounded-xl shadow-2xl overflow-hidden">
+              <div class="px-5 py-4 border-b border-console-500/30">
+                <div class="flex items-center gap-3">
+                  <div class="w-10 h-10 rounded-full bg-harbor-red/20 flex items-center justify-center">
+                    <Trash2 class="w-5 h-5 text-harbor-red" />
+                  </div>
+                  <div>
+                    <h3 class="font-mono text-sm font-bold text-console-100">确认删除</h3>
+                    <p class="text-[11px] font-mono text-console-400">此操作不可撤销</p>
+                  </div>
+                </div>
+              </div>
+              <div class="px-5 py-4 border-b border-console-500/30">
+                <p class="text-xs font-mono text-console-200">
+                  确定要删除该调度计划吗？相关操作记录将保留在日志中。
+                </p>
+                <div v-if="store.selectedShip" class="mt-2 text-[11px] font-mono text-console-400">
+                  船舶: <span class="text-console-200">{{ store.selectedShip.name }}</span>
+                </div>
+              </div>
+              <div class="px-5 py-3 flex items-center justify-end gap-2 bg-console-800/30">
+                <button
+                  @click="showDeleteConfirm = false"
+                  class="px-4 py-2 text-xs font-mono text-console-200 border border-console-500/40 rounded hover:bg-console-700/50 transition-all"
+                >
+                  取消
+                </button>
+                <button
+                  @click="doDelete"
+                  class="px-4 py-2 text-xs font-mono text-white bg-harbor-red rounded hover:bg-harbor-red/80 transition-all"
+                >
+                  确认删除
+                </button>
+              </div>
+            </div>
+          </div>
+        </Transition>
+      </Teleport>
     </aside>
   </Transition>
 </template>
@@ -78,6 +190,14 @@ function closeSidebar() {
 .slide-enter-from,
 .slide-leave-to {
   transform: translateX(100%);
+  opacity: 0;
+}
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+.fade-enter-from,
+.fade-leave-to {
   opacity: 0;
 }
 </style>

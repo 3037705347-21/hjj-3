@@ -199,6 +199,67 @@ export const useScheduleStore = defineStore('schedule', () => {
     return berths.value.find((b) => b.id === id);
   }
 
+  function createSchedule(data: Omit<BerthSchedule, 'id'>) {
+    const newId = `sched-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    const newSchedule: BerthSchedule = {
+      ...data,
+      id: newId,
+    };
+    schedules.value.push(newSchedule);
+    addLog({
+      type: 'create',
+      scheduleId: newId,
+      shipId: data.shipId,
+      description: `新增调度计划 ${newId}`,
+      after: { ...newSchedule } as unknown as Record<string, unknown>,
+    });
+    return newSchedule;
+  }
+
+  function deleteSchedule(id: string) {
+    const idx = schedules.value.findIndex((s) => s.id === id);
+    if (idx === -1) return;
+    const schedule = schedules.value[idx];
+    const before = { ...schedule };
+    schedules.value.splice(idx, 1);
+    if (selectedScheduleId.value === id) {
+      selectedScheduleId.value = null;
+    }
+    addLog({
+      type: 'delete',
+      scheduleId: id,
+      shipId: schedule.shipId,
+      description: `删除调度计划 ${id}`,
+      before: before as unknown as Record<string, unknown>,
+    });
+  }
+
+  function copySchedule(id: string) {
+    const schedule = schedules.value.find((s) => s.id === id);
+    if (!schedule) return null;
+    const eta = new Date(schedule.eta);
+    const etd = new Date(schedule.etd);
+    const newSchedule: Omit<BerthSchedule, 'id'> = {
+      shipId: schedule.shipId,
+      berthId: schedule.berthId,
+      eta,
+      etd,
+      status: 'anchored',
+      operationProgress: 0,
+      operationTeam: schedule.operationTeam,
+      remarks: schedule.remarks,
+      source: schedule.source,
+      priorityAdjustReason: schedule.priorityAdjustReason,
+      estimatedDuration: schedule.estimatedDuration,
+    };
+    return createSchedule(newSchedule);
+  }
+
+  function getAvailableShips() {
+    const scheduledShipIds = new Set(schedules.value.map((s) => s.shipId));
+    return ships.value.filter((s) => !scheduledShipIds.has(s.id));
+  }
+
   return {
     ships,
     berths,
@@ -227,5 +288,9 @@ export const useScheduleStore = defineStore('schedule', () => {
     addLog,
     getShipById,
     getBerthById,
+    createSchedule,
+    deleteSchedule,
+    copySchedule,
+    getAvailableShips,
   };
 });

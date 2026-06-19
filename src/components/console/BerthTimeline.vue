@@ -4,8 +4,10 @@ import { useScheduleStore } from '../../stores/schedule';
 import { useDragSchedule } from '../../composables/useDragSchedule';
 import { useConflictDetection } from '../../composables/useConflictDetection';
 import TimelineShipBlock from './TimelineShipBlock.vue';
+import ScheduleEditDrawer from '../common/ScheduleEditDrawer.vue';
 import { format, addHours, differenceInMinutes } from 'date-fns';
-import { AlertTriangle, Wrench, GripVertical } from 'lucide-vue-next';
+import { AlertTriangle, Wrench, GripVertical, Plus } from 'lucide-vue-next';
+import type { BerthSchedule } from '../../types';
 
 const store = useScheduleStore();
 const { detectAllConflicts } = useConflictDetection();
@@ -14,6 +16,9 @@ const timelineRef = ref<HTMLElement | null>(null);
 const rowHeight = 56;
 const headerHeight = 44;
 const berthLabelWidth = 180;
+
+const showAddDrawer = ref(false);
+const prefillSchedule = ref<Partial<BerthSchedule> | undefined>(undefined);
 
 const startTime = computed(() => addHours(new Date(), -6));
 const endTime = computed(() => addHours(new Date(), 66));
@@ -105,6 +110,35 @@ function handleShipClick(scheduleId: string) {
   store.setSelectedSchedule(scheduleId);
 }
 
+function handleTimelineDoubleClick(e: MouseEvent) {
+  if (!timelineRef.value) return;
+  const rect = timelineRef.value.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+  const berthId = getBerthFromY(y);
+  if (!berthId) return;
+  const eta = getTimeFromX(x);
+  const duration = 24;
+  const etd = addHours(eta, duration);
+  prefillSchedule.value = {
+    berthId,
+    eta,
+    etd,
+    status: 'anchored',
+    operationProgress: 0,
+  };
+  showAddDrawer.value = true;
+}
+
+function openAddNew() {
+  prefillSchedule.value = undefined;
+  showAddDrawer.value = true;
+}
+
+function handleSaved(schedule: BerthSchedule) {
+  store.setSelectedSchedule(schedule.id);
+}
+
 watch(
   () => store.schedules.map((s) => [s.berthId, s.eta, s.etd]),
   () => {
@@ -127,7 +161,7 @@ onMounted(() => {
           泊位调度时间轴
         </h3>
         <span class="text-[10px] font-mono text-console-300">
-          拖拽船舶方块调整调度
+          拖拽船舶方块调整调度 · 双击空白处快速新增
         </span>
       </div>
       <div class="flex items-center gap-2">
@@ -140,6 +174,13 @@ onMounted(() => {
             {{ store.conflicts.length }} 个冲突
           </span>
         </div>
+        <button
+          @click="openAddNew"
+          class="flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-mono text-console-900 bg-gradient-to-r from-harbor-cyan to-harbor-cyan/80 rounded shadow-glow-cyan hover:shadow-glow-blue transition-all"
+        >
+          <Plus class="w-3.5 h-3.5" />
+          新增计划
+        </button>
       </div>
     </div>
 
@@ -149,6 +190,7 @@ onMounted(() => {
       @dragover="onDragOver"
       @dragleave="onDragLeave"
       @drop="onDrop"
+      @dblclick="handleTimelineDoubleClick"
       :style="{ minHeight: `${headerHeight + store.sortedBerths.length * rowHeight}px` }"
     >
       <div
@@ -262,5 +304,13 @@ onMounted(() => {
         />
       </div>
     </div>
+
+    <ScheduleEditDrawer
+      :visible="showAddDrawer"
+      mode="create"
+      :prefill="prefillSchedule"
+      @close="showAddDrawer = false"
+      @saved="handleSaved"
+    />
   </div>
 </template>

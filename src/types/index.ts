@@ -37,6 +37,8 @@ export interface Berth {
   status: 'available' | 'occupied' | 'maintenance';
 }
 
+export type ScheduleSource = 'manual' | 'import' | 'auto' | 'api';
+
 export interface BerthSchedule {
   id: string;
   shipId: string;
@@ -49,6 +51,9 @@ export interface BerthSchedule {
   operationProgress: number;
   operationTeam?: string;
   remarks?: string;
+  source?: ScheduleSource;
+  priorityAdjustReason?: string;
+  estimatedDuration?: number;
 }
 
 export interface TideRecord {
