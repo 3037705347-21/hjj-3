@@ -479,4 +479,10 @@ export const PieChart = defineComponent({
       );
   },
 });
+
+export default {
+  BarChart,
+  LineChart,
+  PieChart,
+};
 </script>
