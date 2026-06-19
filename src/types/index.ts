@@ -168,7 +168,9 @@ export type PermissionModule =
   | 'status_change'
   | 'user_manage'
   | 'role_manage'
-  | 'audit_view';
+  | 'audit_view'
+  | 'resource_manage'
+  | 'resource_allocate';
 
 export const PERMISSION_MODULE_LABELS: Record<PermissionModule, string> = {
   berth_schedule: '泊位调度编辑',
@@ -178,6 +180,8 @@ export const PERMISSION_MODULE_LABELS: Record<PermissionModule, string> = {
   user_manage: '用户管理',
   role_manage: '角色管理',
   audit_view: '审计查看',
+  resource_manage: '资源管理',
+  resource_allocate: '资源分配',
 };
 
 export const PERMISSION_ACTION_LABELS: Record<PermissionAction, string> = {
@@ -325,3 +329,123 @@ export interface AuditLog {
   before: Record<string, unknown> | null;
   after: Record<string, unknown> | null;
 }
+
+export type ResourceType = 'berth' | 'team' | 'equipment';
+
+export const RESOURCE_TYPE_LABELS: Record<ResourceType, string> = {
+  berth: '泊位',
+  team: '作业班组',
+  equipment: '设备',
+};
+
+export type ResourceStatus = 'available' | 'occupied' | 'maintenance' | 'disabled';
+
+export const RESOURCE_STATUS_LABELS: Record<ResourceStatus, string> = {
+  available: '可用',
+  occupied: '占用中',
+  maintenance: '维护中',
+  disabled: '停用',
+};
+
+export interface AvailableTimeSlot {
+  start: Date;
+  end: Date;
+}
+
+export interface BerthResource {
+  id: string;
+  type: ResourceType;
+  name: string;
+  berthId?: string;
+  availableSlots: AvailableTimeSlot[];
+  status: ResourceStatus;
+  scheduleIds: string[];
+  operationTeam?: string;
+  remarks?: string;
+  disableReason?: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface TeamResource {
+  id: string;
+  type: ResourceType;
+  name: string;
+  berthId?: string;
+  availableSlots: AvailableTimeSlot[];
+  status: ResourceStatus;
+  scheduleIds: string[];
+  operationTeam?: string;
+  members?: string[];
+  remarks?: string;
+  disableReason?: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface EquipmentResource {
+  id: string;
+  type: ResourceType;
+  name: string;
+  berthId?: string;
+  equipmentCategory?: string;
+  availableSlots: AvailableTimeSlot[];
+  status: ResourceStatus;
+  scheduleIds: string[];
+  operationTeam?: string;
+  remarks?: string;
+  disableReason?: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export type Resource = BerthResource | TeamResource | EquipmentResource;
+
+export interface ResourceAllocation {
+  id: string;
+  resourceId: string;
+  resourceName: string;
+  resourceType: ResourceType;
+  scheduleId: string;
+  startTime: Date;
+  endTime: Date;
+  allocatedBy: string;
+  allocatedAt: Date;
+  remarks?: string;
+}
+
+export type ResourceConflictType =
+  | 'team_time_overlap'
+  | 'equipment_time_overlap'
+  | 'resource_unavailable'
+  | 'resource_disabled'
+  | 'resource_maintenance';
+
+export const RESOURCE_CONFLICT_TYPE_LABELS: Record<ResourceConflictType, string> = {
+  team_time_overlap: '班组时间冲突',
+  equipment_time_overlap: '设备时间冲突',
+  resource_unavailable: '资源不可用',
+  resource_disabled: '资源已停用',
+  resource_maintenance: '资源维护中',
+};
+
+export interface ResourceConflict {
+  id: string;
+  type: ResourceConflictType;
+  severity: 'error' | 'warning';
+  resourceId: string;
+  resourceName: string;
+  resourceType: ResourceType;
+  scheduleId: string;
+  relatedScheduleId?: string;
+  message: string;
+  overlapStart?: Date;
+  overlapEnd?: Date;
+  detectedAt: Date;
+  resolved: boolean;
+  resolvedAt?: Date;
+  resolvedBy?: string;
+  resolutionNote?: string;
+}
+
+export type ResourcePermissionModule = 'resource_manage' | 'resource_allocate';

@@ -88,6 +88,14 @@ export const useAuthStore = defineStore('auth', () => {
     hasPermission('role_manage', 'read'),
   );
 
+  const canManageResources = computed(() =>
+    hasPermission('resource_manage', 'read'),
+  );
+
+  const canAllocateResources = computed(() =>
+    hasPermission('resource_allocate', 'update'),
+  );
+
   return {
     currentUser,
     isLoggedIn,
@@ -104,6 +112,8 @@ export const useAuthStore = defineStore('auth', () => {
     canChangeStatus,
     canManageUsers,
     canManageRoles,
+    canManageResources,
+    canAllocateResources,
     login,
     loginAsDefault,
     logout,

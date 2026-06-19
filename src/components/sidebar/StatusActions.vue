@@ -2,6 +2,8 @@
 import type { BerthSchedule, OperationStatus } from '../../types';
 import { useScheduleStore } from '../../stores/schedule';
 import { useAuthStore } from '../../stores/auth';
+import { useResourceStore } from '../../stores/resource';
+import { useRouter } from 'vue-router';
 import {
   Anchor,
   Navigation,
@@ -13,6 +15,7 @@ import {
   MessageSquare,
   AlertTriangle,
   Lock,
+  Layers,
 } from 'lucide-vue-next';
 import { ref, watch } from 'vue';
 
@@ -22,6 +25,8 @@ const props = defineProps<{
 
 const store = useScheduleStore();
 const authStore = useAuthStore();
+const resourceStore = useResourceStore();
+const router = useRouter();
 const remarkInput = ref(props.schedule.remarks || '');
 const delayReasonInput = ref(props.schedule.delayReason || '');
 
@@ -45,8 +50,30 @@ const statusActions: { status: OperationStatus; label: string; icon: typeof Anch
   { status: 'departed', label: '离港', icon: CheckCircle2, color: 'border-console-300 text-console-300 hover:bg-console-400/20' },
 ];
 
+const OPERATION_STATUSES: OperationStatus[] = ['berthing', 'loading', 'unloading'];
+
+function isOperationStatus(status: OperationStatus): boolean {
+  return OPERATION_STATUSES.includes(status);
+}
+
+function getResourceCheckResult(status: OperationStatus) {
+  if (!isOperationStatus(status)) return { allowed: true };
+  return resourceStore.canTransitionToOperation(props.schedule.id);
+}
+
 function updateStatus(status: OperationStatus) {
   if (!authStore.canChangeStatus) return;
+
+  if (isOperationStatus(status)) {
+    const check = resourceStore.canTransitionToOperation(props.schedule.id);
+    if (!check.allowed) {
+      if (confirm(`资源分配检查未通过：${check.reason}\n\n是否前往资源协同页面进行分配？`)) {
+        router.push('/resources');
+      }
+      return;
+    }
+  }
+
   store.updateScheduleStatus(props.schedule.id, status);
 }
 
@@ -78,16 +105,58 @@ function saveDelayReason() {
         @click="updateStatus(action.status)"
         :disabled="!authStore.canChangeStatus"
         :class="[
-          'flex flex-col items-center gap-1 py-2 px-1 rounded border transition-all duration-150',
+          'flex flex-col items-center gap-1 py-2 px-1 rounded border transition-all duration-150 relative',
           authStore.canChangeStatus ? 'cursor-pointer' : 'cursor-not-allowed opacity-50',
           schedule.status === action.status
             ? action.color + ' bg-opacity-20 shadow-glow-blue scale-[1.02]'
             : 'border-console-600/50 text-console-400 hover:border-opacity-80',
         ]"
+        :title="
+          isOperationStatus(action.status)
+            ? getResourceCheckResult(action.status).allowed
+              ? action.label
+              : '资源分配未完成：' + (getResourceCheckResult(action.status).reason || '')
+            : action.label
+        "
       >
         <component :is="action.icon" class="w-4 h-4" />
         <span class="text-[10px] font-mono">{{ action.label }}</span>
+        <span
+          v-if="
+            isOperationStatus(action.status) &&
+            schedule.status !== action.status &&
+            !getResourceCheckResult(action.status).allowed
+          "
+          class="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-harbor-red flex items-center justify-center"
+          title="资源分配检查未通过"
+        >
+          <AlertTriangle class="w-2 h-2 text-white" />
+        </span>
       </button>
+    </div>
+
+    <div
+      v-if="
+        isOperationStatus('berthing') &&
+        !resourceStore.canTransitionToOperation(schedule.id).allowed
+      "
+      class="mb-4 p-3 rounded-lg bg-harbor-yellow/10 border border-harbor-yellow/30"
+    >
+      <div class="flex items-start gap-2">
+        <Layers class="w-3.5 h-3.5 text-harbor-yellow mt-0.5 flex-shrink-0" />
+        <div class="flex-1">
+          <p class="text-[10px] font-mono font-medium text-harbor-yellow mb-1">资源分配提醒</p>
+          <p class="text-[10px] font-mono text-console-300">
+            {{ resourceStore.canTransitionToOperation(schedule.id).reason }}
+          </p>
+          <button
+            @click="router.push('/resources')"
+            class="mt-2 text-[10px] font-mono text-harbor-cyan hover:underline flex items-center gap-1"
+          >
+            前往资源协同 →
+          </button>
+        </div>
+      </div>
     </div>
 
     <div class="border-t border-console-600/30 pt-3">

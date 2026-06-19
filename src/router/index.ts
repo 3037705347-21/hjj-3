@@ -19,6 +19,30 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '调度日志', requireAuth: true },
   },
   {
+    path: '/resources',
+    name: 'resource-list',
+    component: () => import('@/pages/resource/ResourceListPage.vue'),
+    meta: { title: '资源列表', requireAuth: true, permission: 'resource_manage' as PermissionModule },
+  },
+  {
+    path: '/resources/board',
+    name: 'resource-board',
+    component: () => import('@/pages/resource/ResourceBoardPage.vue'),
+    meta: { title: '资源占用看板', requireAuth: true, permission: 'resource_manage' as PermissionModule },
+  },
+  {
+    path: '/resources/conflicts',
+    name: 'resource-conflict-list',
+    component: () => import('@/pages/resource/ResourceConflictListPage.vue'),
+    meta: { title: '资源冲突列表', requireAuth: true, permission: 'resource_manage' as PermissionModule },
+  },
+  {
+    path: '/resources/conflicts/:id',
+    name: 'resource-conflict-detail',
+    component: () => import('@/pages/resource/ResourceConflictDetailPage.vue'),
+    meta: { title: '资源冲突详情', requireAuth: true, permission: 'resource_manage' as PermissionModule },
+  },
+  {
     path: '/permission/users',
     name: 'user-list',
     component: () => import('@/pages/permission/UserListPage.vue'),

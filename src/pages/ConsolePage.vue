@@ -10,11 +10,12 @@ import ShipListTable from '../components/console/ShipListTable.vue';
 import TideIndicator from '../components/console/TideIndicator.vue';
 import ShipDetailSidebar from '../components/sidebar/ShipDetailSidebar.vue';
 import LogPanel from '../components/logs/LogPanel.vue';
-import { Anchor, History, User, RefreshCw, Settings, Bell, Shield, Users, ClipboardCheck } from 'lucide-vue-next';
+import { Anchor, History, User, RefreshCw, Settings, Bell, Shield, Users, ClipboardCheck, Layers } from 'lucide-vue-next';
 import { format } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
 import type { ScheduleFilterCriteria, OperationStatus } from '../types';
 import { useApprovalStore } from '../stores/approval';
+import { useResourceStore } from '../stores/resource';
 
 type StatKey =
   | 'shipsInPort'
@@ -32,6 +33,7 @@ type ExternalFilter = Partial<ScheduleFilterCriteria> & { __token?: number };
 const store = useScheduleStore();
 const authStore = useAuthStore();
 const approvalStore = useApprovalStore();
+const resourceStore = useResourceStore();
 const router = useRouter();
 
 const currentTime = ref(new Date());
@@ -44,7 +46,9 @@ onMounted(() => {
   }, 1000);
 });
 
-const conflictCount = computed(() => store.conflicts.filter((c) => c.severity === 'error').length);
+const conflictCount = computed(() =>
+  store.conflicts.filter((c) => c.severity === 'error').length + resourceStore.activeConflicts.length,
+);
 
 function applyTableFilter(criteria: Partial<ScheduleFilterCriteria>) {
   filterToken++;
@@ -144,6 +148,19 @@ function onStatCardClick(key: StatKey) {
                 class="ml-0.5 min-w-[16px] h-[16px] px-0.5 rounded-full bg-harbor-yellow text-console-900 text-[8px] font-mono font-bold flex items-center justify-center"
               >
                 {{ approvalStore.pendingCount }}
+              </span>
+            </button>
+            <button
+              @click="router.push('/resources')"
+              class="px-3 py-1.5 rounded text-xs font-mono font-medium text-console-300 border border-console-500/30 hover:bg-console-700/50 hover:text-console-100 transition-all flex items-center gap-1.5 relative"
+            >
+              <Layers class="w-3.5 h-3.5" />
+              资源协同
+              <span
+                v-if="resourceStore.activeConflicts.length > 0"
+                class="ml-0.5 min-w-[16px] h-[16px] px-0.5 rounded-full bg-harbor-red text-white text-[8px] font-mono font-bold flex items-center justify-center"
+              >
+                {{ resourceStore.activeConflicts.length }}
               </span>
             </button>
             <button
