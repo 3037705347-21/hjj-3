@@ -8,6 +8,9 @@ import type {
   ScheduleLog,
   ScheduleConflict,
   OperationStatus,
+  OperationMilestone,
+  MilestoneKey,
+  ProgressMode,
 } from '../types';
 import {
   mockShips,
@@ -16,6 +19,7 @@ import {
   generateTideRecords,
   mockLogs,
 } from '../data/mock';
+import { useScheduleLogger } from '../composables/useScheduleLogger';
 
 export const useScheduleStore = defineStore('schedule', () => {
   const ships = ref<Ship[]>(mockShips);
@@ -26,6 +30,9 @@ export const useScheduleStore = defineStore('schedule', () => {
   const conflicts = ref<ScheduleConflict[]>([]);
   const selectedScheduleId = ref<string | null>(null);
   const currentOperator = ref('张伟');
+  const logger = useScheduleLogger();
+
+  const DEFAULT_DELAY_THRESHOLD = 30;
 
   const sortedBerths = computed(() =>
     [...berths.value].sort((a, b) => a.position - b.position),
@@ -119,17 +126,82 @@ export const useScheduleStore = defineStore('schedule', () => {
     });
   }
 
+  function checkAndWarnDelay(
+    schedule: BerthSchedule,
+    milestoneKey: MilestoneKey,
+    actualTime: Date,
+    plannedTime: Date,
+  ) {
+    const threshold = schedule.delayThresholdMinutes ?? DEFAULT_DELAY_THRESHOLD;
+    const diffMinutes = (actualTime.getTime() - plannedTime.getTime()) / (1000 * 60);
+    if (diffMinutes > threshold) {
+      const milestoneLabels: Record<MilestoneKey, string> = {
+        arrival: '抵达',
+        berthing: '靠泊',
+        operation_start: '开工',
+        operation_mid: '作业中点',
+        operation_end: '完工',
+        departure: '离泊',
+      };
+      const ship = ships.value.find((s) => s.id === schedule.shipId);
+      const shipName = ship?.name || schedule.shipId;
+      logger.logWarning(
+        schedule.id,
+        `${shipName} ${milestoneLabels[milestoneKey]}延误 ${Math.round(diffMinutes)} 分钟，超过阈值 ${threshold} 分钟`,
+      );
+    }
+  }
+
+  function updateMilestone(schedule: BerthSchedule, key: MilestoneKey, actualTime: Date) {
+    if (!schedule.milestones) return;
+    const milestone = schedule.milestones.find((m) => m.key === key);
+    if (milestone && !milestone.actualTime) {
+      milestone.actualTime = actualTime;
+      milestone.completed = true;
+      if (milestone.plannedTime) {
+        checkAndWarnDelay(schedule, key, actualTime, milestone.plannedTime);
+      }
+    }
+  }
+
   function updateScheduleStatus(id: string, status: OperationStatus) {
     const schedule = schedules.value.find((s) => s.id === id);
     if (!schedule) return;
     const beforeStatus = schedule.status;
     schedule.status = status;
+
+    const now = new Date();
+
+    if (status === 'approaching') {
+      updateMilestone(schedule, 'arrival', now);
+    }
+
     if (status === 'berthing' && !schedule.actualBerthing) {
-      schedule.actualBerthing = new Date();
+      schedule.actualBerthing = now;
+      updateMilestone(schedule, 'berthing', now);
     }
+
+    if ((status === 'loading' || status === 'unloading') && !schedule.actualOperationStart) {
+      schedule.actualOperationStart = now;
+      updateMilestone(schedule, 'operation_start', now);
+    }
+
+    if (status === 'departing') {
+      if (!schedule.actualOperationEnd && schedule.operationProgress >= 100) {
+        schedule.actualOperationEnd = now;
+        updateMilestone(schedule, 'operation_end', now);
+      }
+    }
+
     if (status === 'departed' && !schedule.actualDeparture) {
-      schedule.actualDeparture = new Date();
+      schedule.actualDeparture = now;
+      updateMilestone(schedule, 'departure', now);
+      if (schedule.operationProgress >= 100 && !schedule.actualOperationEnd) {
+        schedule.actualOperationEnd = now;
+        updateMilestone(schedule, 'operation_end', now);
+      }
     }
+
     addLog({
       type: 'status_change',
       scheduleId: id,
@@ -143,7 +215,97 @@ export const useScheduleStore = defineStore('schedule', () => {
   function updateOperationProgress(id: string, progress: number) {
     const schedule = schedules.value.find((s) => s.id === id);
     if (!schedule) return;
+    const oldProgress = schedule.operationProgress;
     schedule.operationProgress = Math.max(0, Math.min(100, progress));
+
+    if (schedule.milestones) {
+      const now = new Date();
+      if (schedule.operationProgress >= 50 && oldProgress < 50) {
+        updateMilestone(schedule, 'operation_mid', now);
+      }
+      if (schedule.operationProgress >= 100 && oldProgress < 100) {
+        if (!schedule.actualOperationEnd) {
+          schedule.actualOperationEnd = now;
+        }
+        updateMilestone(schedule, 'operation_end', now);
+      }
+    }
+  }
+
+  function setProgressMode(id: string, mode: ProgressMode) {
+    const schedule = schedules.value.find((s) => s.id === id);
+    if (!schedule) return;
+    schedule.progressMode = mode;
+    if (mode === 'milestone' && !schedule.milestones) {
+      schedule.milestones = generateDefaultMilestones(schedule);
+    }
+  }
+
+  function generateDefaultMilestones(schedule: BerthSchedule): OperationMilestone[] {
+    const eta = new Date(schedule.eta);
+    const etd = new Date(schedule.etd);
+    const totalDuration = etd.getTime() - eta.getTime();
+
+    return [
+      {
+        key: 'arrival',
+        label: '抵达锚地',
+        plannedTime: new Date(eta.getTime() - totalDuration * 0.1),
+        completed: false,
+        progressWeight: 10,
+      },
+      {
+        key: 'berthing',
+        label: '靠泊完成',
+        plannedTime: eta,
+        completed: !!schedule.actualBerthing,
+        actualTime: schedule.actualBerthing,
+        progressWeight: 20,
+      },
+      {
+        key: 'operation_start',
+        label: '作业开始',
+        plannedTime: new Date(eta.getTime() + totalDuration * 0.1),
+        completed: !!schedule.actualOperationStart,
+        actualTime: schedule.actualOperationStart,
+        progressWeight: 30,
+      },
+      {
+        key: 'operation_mid',
+        label: '作业中点',
+        plannedTime: new Date(eta.getTime() + totalDuration * 0.5),
+        completed: false,
+        progressWeight: 50,
+      },
+      {
+        key: 'operation_end',
+        label: '作业完成',
+        plannedTime: new Date(etd.getTime() - totalDuration * 0.1),
+        completed: !!schedule.actualOperationEnd,
+        actualTime: schedule.actualOperationEnd,
+        progressWeight: 90,
+      },
+      {
+        key: 'departure',
+        label: '离泊完成',
+        plannedTime: etd,
+        completed: !!schedule.actualDeparture,
+        actualTime: schedule.actualDeparture,
+        progressWeight: 100,
+      },
+    ];
+  }
+
+  function updateCargoCompleted(id: string, value: number) {
+    const schedule = schedules.value.find((s) => s.id === id);
+    if (!schedule) return;
+    schedule.cargoCompleted = Math.max(0, value);
+  }
+
+  function updateDelayReason(id: string, reason: string) {
+    const schedule = schedules.value.find((s) => s.id === id);
+    if (!schedule) return;
+    schedule.delayReason = reason;
   }
 
   function moveSchedule(id: string, berthId: string, eta: Date, etd: Date) {
@@ -246,11 +408,16 @@ export const useScheduleStore = defineStore('schedule', () => {
       etd,
       status: 'anchored',
       operationProgress: 0,
+      progressMode: schedule.progressMode || 'percentage',
+      milestones: schedule.progressMode === 'milestone'
+        ? generateDefaultMilestones({ ...schedule, eta, etd, operationProgress: 0 })
+        : undefined,
       operationTeam: schedule.operationTeam,
       remarks: schedule.remarks,
       source: schedule.source,
       priorityAdjustReason: schedule.priorityAdjustReason,
       estimatedDuration: schedule.estimatedDuration,
+      delayThresholdMinutes: schedule.delayThresholdMinutes,
     };
     return createSchedule(newSchedule);
   }
@@ -326,6 +493,7 @@ export const useScheduleStore = defineStore('schedule', () => {
     conflicts,
     selectedScheduleId,
     currentOperator,
+    DEFAULT_DELAY_THRESHOLD,
     sortedBerths,
     selectedSchedule,
     selectedShip,
@@ -340,6 +508,10 @@ export const useScheduleStore = defineStore('schedule', () => {
     updateSchedule,
     updateScheduleStatus,
     updateOperationProgress,
+    setProgressMode,
+    generateDefaultMilestones,
+    updateCargoCompleted,
+    updateDelayReason,
     moveSchedule,
     setConflicts,
     addLog,

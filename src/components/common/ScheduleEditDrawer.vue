@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch, reactive } from 'vue';
-import type { BerthSchedule, OperationStatus, ScheduleSource, ScheduleConflict } from '../../types';
+import type { BerthSchedule, OperationStatus, ScheduleSource, ScheduleConflict, ProgressMode } from '../../types';
 import { useScheduleStore } from '../../stores/schedule';
 import { useConflictDetection } from '../../composables/useConflictDetection';
 import { useScheduleLogger } from '../../composables/useScheduleLogger';
@@ -58,6 +58,7 @@ type FormData = {
   etd: string;
   status: OperationStatus;
   operationProgress: number;
+  progressMode: ProgressMode;
   operationTeam: string;
   remarks: string;
   source: ScheduleSource;
@@ -72,6 +73,7 @@ const initialForm: FormData = {
   etd: '',
   status: 'anchored',
   operationProgress: 0,
+  progressMode: 'percentage',
   operationTeam: '',
   remarks: '',
   source: 'manual',
@@ -143,6 +145,7 @@ function loadSchedule(id: string) {
   form.etd = toLocalInput(s.etd);
   form.status = s.status;
   form.operationProgress = s.operationProgress;
+  form.progressMode = s.progressMode || 'percentage';
   form.operationTeam = s.operationTeam || '';
   form.remarks = s.remarks || '';
   form.source = (s.source as ScheduleSource) || 'manual';
@@ -166,6 +169,7 @@ watch(
       if (props.prefill.eta) form.eta = toLocalInput(props.prefill.eta);
       if (props.prefill.etd) form.etd = toLocalInput(props.prefill.etd);
       if (props.prefill.status) form.status = props.prefill.status;
+      if (props.prefill.progressMode) form.progressMode = props.prefill.progressMode;
       if (props.prefill.operationTeam) form.operationTeam = props.prefill.operationTeam;
       if (props.prefill.remarks) form.remarks = props.prefill.remarks;
       if (props.prefill.source) form.source = props.prefill.source;
@@ -213,6 +217,7 @@ function runConflictCheck(): ScheduleConflict[] {
     etd: new Date(form.etd),
     status: form.status,
     operationProgress: form.operationProgress,
+    progressMode: form.progressMode,
     operationTeam: form.operationTeam,
     remarks: form.remarks,
   };
@@ -289,6 +294,7 @@ async function onSubmit() {
     etd: etdDate,
     status: form.status,
     operationProgress: form.operationProgress,
+    progressMode: form.progressMode,
     operationTeam: form.operationTeam || undefined,
     remarks: form.remarks || undefined,
     source: form.source,

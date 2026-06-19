@@ -9,6 +9,25 @@ export type OperationStatus =
   | 'departing'
   | 'departed';
 
+export type MilestoneKey =
+  | 'arrival'
+  | 'berthing'
+  | 'operation_start'
+  | 'operation_mid'
+  | 'operation_end'
+  | 'departure';
+
+export interface OperationMilestone {
+  key: MilestoneKey;
+  label: string;
+  plannedTime?: Date;
+  actualTime?: Date;
+  completed: boolean;
+  progressWeight: number;
+}
+
+export type ProgressMode = 'percentage' | 'milestone';
+
 export type CargoType = 'container' | 'bulk' | 'liquid' | 'general' | 'ro-ro';
 
 export interface Ship {
@@ -47,13 +66,20 @@ export interface BerthSchedule {
   etd: Date;
   actualBerthing?: Date;
   actualDeparture?: Date;
+  actualOperationStart?: Date;
+  actualOperationEnd?: Date;
   status: OperationStatus;
   operationProgress: number;
+  progressMode: ProgressMode;
+  milestones?: OperationMilestone[];
+  cargoCompleted?: number;
+  delayReason?: string;
   operationTeam?: string;
   remarks?: string;
   source?: ScheduleSource;
   priorityAdjustReason?: string;
   estimatedDuration?: number;
+  delayThresholdMinutes?: number;
 }
 
 export interface TideRecord {

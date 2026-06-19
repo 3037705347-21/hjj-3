@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useScheduleStore } from '../../stores/schedule';
-import { X, ChevronRight, Pencil, Copy, Trash2 } from 'lucide-vue-next';
+import { X, ChevronRight, Pencil, Copy, Trash2, Clock, AlertTriangle, CheckCircle2 } from 'lucide-vue-next';
 import ShipInfoCard from './ShipInfoCard.vue';
 import OperationProgress from './OperationProgress.vue';
 import StatusActions from './StatusActions.vue';
@@ -9,6 +9,8 @@ import ConflictAlert from '../logs/ConflictAlert.vue';
 import ScheduleEditDrawer from '../common/ScheduleEditDrawer.vue';
 import { computed, ref } from 'vue';
 import type { BerthSchedule } from '../../types';
+import { format, differenceInMinutes } from 'date-fns';
+import { zhCN } from 'date-fns/locale';
 
 const store = useScheduleStore();
 
@@ -22,6 +24,85 @@ const scheduleConflicts = computed(() =>
       c.relatedScheduleId === store.selectedScheduleId,
   ),
 );
+
+interface TimeTrackingItem {
+  label: string;
+  plannedTime: Date;
+  actualTime?: Date;
+  key: string;
+}
+
+const timeTrackingItems = computed<TimeTrackingItem[]>(() => {
+  const schedule = store.selectedSchedule;
+  if (!schedule) return [];
+
+  const items: TimeTrackingItem[] = [
+    {
+      label: '预计抵达 / 实际抵达',
+      plannedTime: new Date(schedule.eta),
+      actualTime: schedule.actualBerthing
+        ? new Date(schedule.actualBerthing)
+        : undefined,
+      key: 'berthing',
+    },
+    {
+      label: '预计开工 / 实际开工',
+      plannedTime: new Date(schedule.eta),
+      actualTime: schedule.actualOperationStart
+        ? new Date(schedule.actualOperationStart)
+        : undefined,
+      key: 'operation_start',
+    },
+    {
+      label: '预计完工 / 实际完工',
+      plannedTime: new Date(schedule.etd),
+      actualTime: schedule.actualOperationEnd
+        ? new Date(schedule.actualOperationEnd)
+        : undefined,
+      key: 'operation_end',
+    },
+    {
+      label: '预计离泊 / 实际离泊',
+      plannedTime: new Date(schedule.etd),
+      actualTime: schedule.actualDeparture
+        ? new Date(schedule.actualDeparture)
+        : undefined,
+      key: 'departure',
+    },
+  ];
+
+  return items;
+});
+
+function formatTime(date?: Date) {
+  if (!date) return '--:--';
+  return format(new Date(date), 'MM-dd HH:mm', { locale: zhCN });
+}
+
+function getTimeDeviation(planned: Date, actual?: Date) {
+  if (!actual) return null;
+  const diff = differenceInMinutes(actual, planned);
+  return diff;
+}
+
+function formatDeviation(minutes: number | null) {
+  if (minutes === null) return '';
+  const abs = Math.abs(minutes);
+  const hours = Math.floor(abs / 60);
+  const mins = abs % 60;
+  const sign = minutes >= 0 ? '+' : '-';
+  if (hours > 0) {
+    return `${sign}${hours}h${mins}m`;
+  }
+  return `${sign}${mins}m`;
+}
+
+function hasDelay(planned: Date, actual?: Date) {
+  if (!actual) return false;
+  const threshold = store.selectedSchedule?.delayThresholdMinutes ?? store.DEFAULT_DELAY_THRESHOLD;
+  const diff = differenceInMinutes(actual, planned);
+  return diff > threshold;
+}
 
 function closeSidebar() {
   store.setSelectedSchedule(null);
@@ -113,6 +194,63 @@ function handleSaved(schedule: BerthSchedule) {
         />
 
         <ShipInfoCard :ship="store.selectedShip" />
+
+        <div class="panel-border rounded-lg p-4">
+          <div class="flex items-center gap-2 mb-3">
+            <Clock class="w-4 h-4 text-harbor-cyan" />
+            <h3 class="font-mono text-sm font-semibold text-console-100">时间跟踪</h3>
+          </div>
+          <div class="space-y-3">
+            <div
+              v-for="item in timeTrackingItems"
+              :key="item.key"
+              class="p-2 rounded bg-console-800/60 border border-console-600/30"
+            >
+              <div class="flex items-center justify-between mb-1.5">
+                <span class="text-[10px] font-mono text-console-400">{{ item.label }}</span>
+                <div
+                  v-if="item.actualTime && hasDelay(item.plannedTime, item.actualTime)"
+                  class="flex items-center gap-1"
+                >
+                  <AlertTriangle class="w-3 h-3 text-harbor-yellow" />
+                  <span class="text-[10px] font-mono text-harbor-yellow">
+                    {{ formatDeviation(getTimeDeviation(item.plannedTime, item.actualTime)) }}
+                  </span>
+                </div>
+                <div
+                  v-else-if="item.actualTime"
+                  class="flex items-center gap-1"
+                >
+                  <CheckCircle2 class="w-3 h-3 text-harbor-cyan" />
+                  <span class="text-[10px] font-mono text-harbor-cyan">
+                    {{ formatDeviation(getTimeDeviation(item.plannedTime, item.actualTime)) }}
+                  </span>
+                </div>
+              </div>
+              <div class="grid grid-cols-2 gap-2">
+                <div>
+                  <p class="text-[9px] font-mono text-console-500 uppercase tracking-wider">计划</p>
+                  <p class="text-[11px] font-mono text-console-300">
+                    {{ formatTime(item.plannedTime) }}
+                  </p>
+                </div>
+                <div>
+                  <p class="text-[9px] font-mono text-console-500 uppercase tracking-wider">实际</p>
+                  <p
+                    class="text-[11px] font-mono"
+                    :class="item.actualTime
+                      ? hasDelay(item.plannedTime, item.actualTime)
+                        ? 'text-harbor-yellow'
+                        : 'text-console-100'
+                      : 'text-console-500'"
+                  >
+                    {{ formatTime(item.actualTime) }}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
 
         <OperationProgress
           :schedule="store.selectedSchedule"

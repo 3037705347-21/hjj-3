@@ -10,8 +10,9 @@ import {
   LogOut,
   CheckCircle2,
   MessageSquare,
+  AlertTriangle,
 } from 'lucide-vue-next';
-import { ref } from 'vue';
+import { ref, watch } from 'vue';
 
 const props = defineProps<{
   schedule: BerthSchedule;
@@ -19,6 +20,17 @@ const props = defineProps<{
 
 const store = useScheduleStore();
 const remarkInput = ref(props.schedule.remarks || '');
+const delayReasonInput = ref(props.schedule.delayReason || '');
+
+watch(
+  () => props.schedule.remarks,
+  (v) => (remarkInput.value = v || ''),
+);
+
+watch(
+  () => props.schedule.delayReason,
+  (v) => (delayReasonInput.value = v || ''),
+);
 
 const statusActions: { status: OperationStatus; label: string; icon: typeof Anchor; color: string }[] = [
   { status: 'anchored', label: '锚泊', icon: Anchor, color: 'border-console-400 text-console-200 hover:bg-console-500/30' },
@@ -36,6 +48,10 @@ function updateStatus(status: OperationStatus) {
 
 function saveRemark() {
   store.updateSchedule(props.schedule.id, { remarks: remarkInput.value });
+}
+
+function saveDelayReason() {
+  store.updateDelayReason(props.schedule.id, delayReasonInput.value);
 }
 </script>
 
@@ -61,6 +77,20 @@ function saveRemark() {
     </div>
 
     <div class="border-t border-console-600/30 pt-3">
+      <div class="flex items-center gap-2 mb-2">
+        <AlertTriangle class="w-3.5 h-3.5 text-harbor-yellow" />
+        <span class="text-[10px] font-mono text-console-400 uppercase tracking-wider">延误原因</span>
+      </div>
+      <textarea
+        v-model="delayReasonInput"
+        @blur="saveDelayReason"
+        rows="2"
+        placeholder="输入延误原因..."
+        class="w-full px-3 py-2 text-xs font-mono bg-console-800/80 border border-console-500/40 rounded text-console-100 placeholder:text-console-500 focus:outline-none focus:border-harbor-yellow/50 resize-none"
+      />
+    </div>
+
+    <div class="border-t border-console-600/30 pt-3 mt-3">
       <div class="flex items-center gap-2 mb-2">
         <MessageSquare class="w-3.5 h-3.5 text-console-400" />
         <span class="text-[10px] font-mono text-console-400 uppercase tracking-wider">调度备注</span>

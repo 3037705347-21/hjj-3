@@ -4,6 +4,7 @@ import type {
   BerthSchedule,
   TideRecord,
   ScheduleLog,
+  OperationMilestone,
 } from '../types';
 
 const now = new Date();
@@ -220,6 +221,61 @@ export const mockBerths: Berth[] = [
 
 const hoursLater = (h: number) => new Date(now.getTime() + h * 3600 * 1000);
 
+function generateMilestones(schedule: Partial<BerthSchedule> & { eta: Date; etd: Date }): OperationMilestone[] {
+  const eta = new Date(schedule.eta);
+  const etd = new Date(schedule.etd);
+  const totalDuration = etd.getTime() - eta.getTime();
+
+  return [
+    {
+      key: 'arrival',
+      label: '抵达锚地',
+      plannedTime: new Date(eta.getTime() - totalDuration * 0.1),
+      completed: false,
+      progressWeight: 10,
+    },
+    {
+      key: 'berthing',
+      label: '靠泊完成',
+      plannedTime: eta,
+      completed: !!schedule.actualBerthing,
+      actualTime: schedule.actualBerthing,
+      progressWeight: 20,
+    },
+    {
+      key: 'operation_start',
+      label: '作业开始',
+      plannedTime: new Date(eta.getTime() + totalDuration * 0.1),
+      completed: !!schedule.actualOperationStart,
+      actualTime: schedule.actualOperationStart,
+      progressWeight: 30,
+    },
+    {
+      key: 'operation_mid',
+      label: '作业中点',
+      plannedTime: new Date(eta.getTime() + totalDuration * 0.5),
+      completed: false,
+      progressWeight: 50,
+    },
+    {
+      key: 'operation_end',
+      label: '作业完成',
+      plannedTime: new Date(etd.getTime() - totalDuration * 0.1),
+      completed: !!schedule.actualOperationEnd,
+      actualTime: schedule.actualOperationEnd,
+      progressWeight: 90,
+    },
+    {
+      key: 'departure',
+      label: '离泊完成',
+      plannedTime: etd,
+      completed: !!schedule.actualDeparture,
+      actualTime: schedule.actualDeparture,
+      progressWeight: 100,
+    },
+  ];
+}
+
 export const mockSchedules: BerthSchedule[] = [
   {
     id: 'sched-001',
@@ -228,13 +284,17 @@ export const mockSchedules: BerthSchedule[] = [
     eta: hoursLater(-8),
     etd: hoursLater(12),
     actualBerthing: hoursLater(-7),
+    actualOperationStart: hoursLater(-6.5),
     status: 'unloading',
     operationProgress: 45,
+    progressMode: 'milestone',
+    cargoCompleted: 89100,
     operationTeam: 'A班组',
     remarks: '危险品集装箱需优先处理',
     source: 'manual',
     priorityAdjustReason: '危险品优先作业',
     estimatedDuration: 20,
+    delayThresholdMinutes: 30,
   },
   {
     id: 'sched-002',
@@ -242,12 +302,16 @@ export const mockSchedules: BerthSchedule[] = [
     berthId: 'berth-02',
     eta: hoursLater(-3),
     etd: hoursLater(16),
-    actualBerthing: hoursLater(-2),
+    actualBerthing: hoursLater(-2.5),
+    actualOperationStart: hoursLater(-2),
     status: 'loading',
     operationProgress: 28,
+    progressMode: 'percentage',
+    cargoCompleted: 61600,
     operationTeam: 'B班组',
     source: 'import',
     estimatedDuration: 19,
+    delayThresholdMinutes: 30,
   },
   {
     id: 'sched-003',
@@ -256,12 +320,16 @@ export const mockSchedules: BerthSchedule[] = [
     eta: hoursLater(-12),
     etd: hoursLater(4),
     actualBerthing: hoursLater(-11),
+    actualOperationStart: hoursLater(-10.5),
     status: 'loading',
     operationProgress: 82,
+    progressMode: 'milestone',
+    cargoCompleted: 266500,
     operationTeam: 'C班组',
     remarks: '铁矿砂卸载作业',
     source: 'api',
     estimatedDuration: 16,
+    delayThresholdMinutes: 30,
   },
   {
     id: 'sched-004',
@@ -271,9 +339,12 @@ export const mockSchedules: BerthSchedule[] = [
     etd: hoursLater(36),
     status: 'berthing',
     operationProgress: 5,
+    progressMode: 'percentage',
     operationTeam: 'D班组',
     source: 'manual',
     estimatedDuration: 42,
+    delayThresholdMinutes: 45,
+    delayReason: '潮汐窗口延误，等待高潮位',
   },
   {
     id: 'sched-005',
@@ -283,8 +354,10 @@ export const mockSchedules: BerthSchedule[] = [
     etd: hoursLater(38),
     status: 'approaching',
     operationProgress: 0,
+    progressMode: 'milestone',
     source: 'auto',
     estimatedDuration: 24,
+    delayThresholdMinutes: 30,
   },
   {
     id: 'sched-006',
@@ -294,8 +367,10 @@ export const mockSchedules: BerthSchedule[] = [
     etd: hoursLater(44),
     status: 'anchored',
     operationProgress: 0,
+    progressMode: 'percentage',
     source: 'manual',
     estimatedDuration: 26,
+    delayThresholdMinutes: 30,
   },
   {
     id: 'sched-007',
@@ -305,8 +380,10 @@ export const mockSchedules: BerthSchedule[] = [
     etd: hoursLater(32),
     status: 'approaching',
     operationProgress: 0,
+    progressMode: 'percentage',
     source: 'import',
     estimatedDuration: 24,
+    delayThresholdMinutes: 30,
   },
   {
     id: 'sched-008',
@@ -316,10 +393,12 @@ export const mockSchedules: BerthSchedule[] = [
     etd: hoursLater(20),
     status: 'approaching',
     operationProgress: 0,
+    progressMode: 'milestone',
     operationTeam: 'A班组',
     source: 'manual',
     priorityAdjustReason: '客轮优先保障',
     estimatedDuration: 18,
+    delayThresholdMinutes: 15,
   },
   {
     id: 'sched-009',
@@ -329,8 +408,10 @@ export const mockSchedules: BerthSchedule[] = [
     etd: hoursLater(48),
     status: 'anchored',
     operationProgress: 0,
+    progressMode: 'percentage',
     source: 'api',
     estimatedDuration: 24,
+    delayThresholdMinutes: 30,
   },
   {
     id: 'sched-010',
@@ -340,10 +421,18 @@ export const mockSchedules: BerthSchedule[] = [
     etd: hoursLater(72),
     status: 'anchored',
     operationProgress: 0,
+    progressMode: 'percentage',
     source: 'manual',
     estimatedDuration: 32,
+    delayThresholdMinutes: 30,
   },
 ];
+
+mockSchedules.forEach((s) => {
+  if (s.progressMode === 'milestone') {
+    s.milestones = generateMilestones(s);
+  }
+});
 
 export const generateTideRecords = (): TideRecord[] => {
   const records: TideRecord[] = [];
