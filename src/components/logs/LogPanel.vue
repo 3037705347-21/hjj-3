@@ -13,15 +13,19 @@ import {
   RotateCcw,
   AlertCircle,
   User,
-  ChevronRight,
   Search,
   Filter,
   Download,
   RotateCcw as ResetIcon,
   ChevronDown,
+  Ship,
+  Anchor,
+  Calendar,
+  Eye,
 } from 'lucide-vue-next';
 import { format } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
+import LogDetailModal from './LogDetailModal.vue';
 
 const props = withDefaults(
   defineProps<{
@@ -40,9 +44,14 @@ useScheduleLogger();
 const typeFilter = ref<LogType | 'all'>('all');
 const searchQuery = ref('');
 const operatorFilter = ref<string | 'all'>('all');
+const scheduleIdFilter = ref<string | 'all'>('all');
+const shipIdFilter = ref<string | 'all'>('all');
+const berthIdFilter = ref<string | 'all'>('all');
 const timeStart = ref<string | null>(null);
 const timeEnd = ref<string | null>(null);
 const showAdvancedFilter = ref(false);
+const selectedLog = ref<ScheduleLog | null>(null);
+const showDetailModal = ref(false);
 
 const logTypeMeta: Record<LogType, { label: string; icon: typeof Clock; color: string; bgClass: string }> = {
   create: { label: '创建', icon: PlusCircle, color: 'text-harbor-green', bgClass: 'bg-harbor-green/15 border-harbor-green/30' },
@@ -59,11 +68,42 @@ const allOperators = computed(() => {
   return Array.from(set);
 });
 
+const allScheduleIds = computed(() => {
+  const set = new Set<string>();
+  store.logs.forEach((l) => l.scheduleId && set.add(l.scheduleId));
+  return Array.from(set).sort();
+});
+
+const allShipIds = computed(() => {
+  const set = new Set<string>();
+  store.logs.forEach((l) => l.shipId && set.add(l.shipId));
+  return Array.from(set).sort();
+});
+
+const allBerthIds = computed(() => {
+  const set = new Set<string>();
+  store.logs.forEach((l) => l.berthId && set.add(l.berthId));
+  return Array.from(set).sort();
+});
+
+function getBerthName(berthId: string): string {
+  const berth = store.getBerthById(berthId);
+  return berth?.name || berthId;
+}
+
+function getShipName(shipId: string): string {
+  const ship = store.getShipById(shipId);
+  return ship?.name || shipId;
+}
+
 const activeFilterCount = computed(() => {
   let count = 0;
   if (typeFilter.value !== 'all') count++;
   if (searchQuery.value) count++;
   if (operatorFilter.value !== 'all') count++;
+  if (scheduleIdFilter.value !== 'all') count++;
+  if (shipIdFilter.value !== 'all') count++;
+  if (berthIdFilter.value !== 'all') count++;
   if (timeStart.value) count++;
   if (timeEnd.value) count++;
   return count;
@@ -83,12 +123,25 @@ const displayedLogs = computed<ScheduleLog[]>(() => {
         l.description.toLowerCase().includes(q) ||
         l.operator.toLowerCase().includes(q) ||
         (l.scheduleId && l.scheduleId.toLowerCase().includes(q)) ||
-        (l.shipId && l.shipId.toLowerCase().includes(q)),
+        (l.shipId && l.shipId.toLowerCase().includes(q)) ||
+        (l.berthId && l.berthId.toLowerCase().includes(q)),
     );
   }
 
   if (operatorFilter.value !== 'all') {
     result = result.filter((l) => l.operator === operatorFilter.value);
+  }
+
+  if (scheduleIdFilter.value !== 'all') {
+    result = result.filter((l) => l.scheduleId === scheduleIdFilter.value);
+  }
+
+  if (shipIdFilter.value !== 'all') {
+    result = result.filter((l) => l.shipId === shipIdFilter.value);
+  }
+
+  if (berthIdFilter.value !== 'all') {
+    result = result.filter((l) => l.berthId === berthIdFilter.value);
   }
 
   if (timeStart.value) {
@@ -117,10 +170,23 @@ function selectSchedule(id: string | undefined) {
   }
 }
 
+function openLogDetail(log: ScheduleLog) {
+  selectedLog.value = log;
+  showDetailModal.value = true;
+}
+
+function closeDetailModal() {
+  showDetailModal.value = false;
+  selectedLog.value = null;
+}
+
 function resetFilters() {
   typeFilter.value = 'all';
   searchQuery.value = '';
   operatorFilter.value = 'all';
+  scheduleIdFilter.value = 'all';
+  shipIdFilter.value = 'all';
+  berthIdFilter.value = 'all';
   timeStart.value = null;
   timeEnd.value = null;
 }
@@ -132,8 +198,9 @@ function exportLogs() {
     类型: logTypeMeta[l.type]?.label || l.type,
     操作人: l.operator,
     描述: l.description,
-    计划ID: l.scheduleId || '',
-    船舶ID: l.shipId || '',
+    计划编号: l.scheduleId || '',
+    船舶: l.shipId ? getShipName(l.shipId) : '',
+    泊位: l.berthId ? getBerthName(l.berthId) : '',
   }));
   if (rows.length === 0) return;
   const csvContent = [
@@ -233,7 +300,7 @@ function exportLogs() {
         </div>
       </div>
 
-      <div v-if="showAdvancedFilter" class="pt-2 border-t border-console-500/15 grid grid-cols-3 gap-2">
+      <div v-if="showAdvancedFilter" class="pt-2 border-t border-console-500/15 grid grid-cols-2 md:grid-cols-3 gap-2">
         <div>
           <label class="text-[10px] font-mono text-console-400 mb-1 block">操作人</label>
           <select
@@ -243,6 +310,42 @@ function exportLogs() {
             <option value="all">全部</option>
             <option v-for="op in allOperators" :key="op" :value="op">
               {{ op }}
+            </option>
+          </select>
+        </div>
+        <div>
+          <label class="text-[10px] font-mono text-console-400 mb-1 block">计划编号</label>
+          <select
+            v-model="scheduleIdFilter"
+            class="w-full px-2 py-1.5 text-xs font-mono bg-console-800/80 border border-console-500/40 rounded text-console-100 focus:outline-none focus:border-harbor-cyan/50"
+          >
+            <option value="all">全部</option>
+            <option v-for="id in allScheduleIds" :key="id" :value="id">
+              {{ id }}
+            </option>
+          </select>
+        </div>
+        <div>
+          <label class="text-[10px] font-mono text-console-400 mb-1 block">船舶编号</label>
+          <select
+            v-model="shipIdFilter"
+            class="w-full px-2 py-1.5 text-xs font-mono bg-console-800/80 border border-console-500/40 rounded text-console-100 focus:outline-none focus:border-harbor-cyan/50"
+          >
+            <option value="all">全部</option>
+            <option v-for="id in allShipIds" :key="id" :value="id">
+              {{ getShipName(id) }}
+            </option>
+          </select>
+        </div>
+        <div>
+          <label class="text-[10px] font-mono text-console-400 mb-1 block">泊位</label>
+          <select
+            v-model="berthIdFilter"
+            class="w-full px-2 py-1.5 text-xs font-mono bg-console-800/80 border border-console-500/40 rounded text-console-100 focus:outline-none focus:border-harbor-cyan/50"
+          >
+            <option value="all">全部</option>
+            <option v-for="id in allBerthIds" :key="id" :value="id">
+              {{ getBerthName(id) }}
             </option>
           </select>
         </div>
@@ -273,8 +376,7 @@ function exportLogs() {
       <div
         v-for="log in displayedLogs"
         :key="log.id"
-        class="flex items-start gap-3 px-4 py-3 border-b border-console-500/15 hover:bg-console-700/30 transition-colors cursor-pointer"
-        @click="selectSchedule(log.scheduleId)"
+        class="flex items-start gap-3 px-4 py-3 border-b border-console-500/15 hover:bg-console-700/30 transition-colors group"
       >
         <div
           :class="[
@@ -287,7 +389,7 @@ function exportLogs() {
             :class="['w-3.5 h-3.5', logTypeMeta[log.type]?.color || 'text-console-300']"
           />
         </div>
-        <div class="flex-1 min-w-0">
+        <div class="flex-1 min-w-0 cursor-pointer" @click="selectSchedule(log.scheduleId)">
           <div class="flex items-center gap-2 flex-wrap">
             <span
               :class="[
@@ -305,18 +407,39 @@ function exportLogs() {
           <p class="text-xs font-mono text-console-200 mt-1">
             {{ log.description }}
           </p>
-          <div class="flex items-center gap-3 mt-1.5">
+          <div class="flex items-center gap-3 mt-1.5 flex-wrap">
             <div class="flex items-center gap-1">
               <User class="w-3 h-3 text-console-400" />
               <span class="text-[10px] font-mono text-console-400">{{ log.operator }}</span>
             </div>
             <div v-if="log.scheduleId" class="flex items-center gap-1 text-[10px] font-mono text-console-400">
-              <ChevronRight class="w-3 h-3" />
+              <Calendar class="w-3 h-3" />
               <span>{{ log.scheduleId }}</span>
+            </div>
+            <div v-if="log.shipId" class="flex items-center gap-1 text-[10px] font-mono text-console-400">
+              <Ship class="w-3 h-3" />
+              <span>{{ getShipName(log.shipId) }}</span>
+            </div>
+            <div v-if="log.berthId" class="flex items-center gap-1 text-[10px] font-mono text-console-400">
+              <Anchor class="w-3 h-3" />
+              <span>{{ getBerthName(log.berthId) }}</span>
             </div>
           </div>
         </div>
+        <button
+          v-if="log.before || log.after"
+          @click.stop="openLogDetail(log)"
+          class="opacity-0 group-hover:opacity-100 flex items-center gap-1 px-2 py-1 text-[10px] font-mono text-console-400 border border-console-500/40 rounded hover:text-harbor-cyan hover:border-harbor-cyan/50 transition-all shrink-0"
+        >
+          <Eye class="w-3 h-3" />
+          详情
+        </button>
       </div>
     </div>
   </div>
+  <LogDetailModal
+    :log="selectedLog"
+    :visible="showDetailModal"
+    @close="closeDetailModal"
+  />
 </template>

@@ -103,6 +103,7 @@ export interface ScheduleLog {
   operator: string;
   scheduleId?: string;
   shipId?: string;
+  berthId?: string;
   description: string;
   before?: Record<string, unknown>;
   after?: Record<string, unknown>;

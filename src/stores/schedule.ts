@@ -156,6 +156,52 @@ export const useScheduleStore = defineStore('schedule', () => {
     return Math.round((completedToday / berthCount) * 100) / 100;
   });
 
+  const todayHighRiskOperations = computed(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today.getTime() + 24 * 3600 * 1000);
+    return logs.value.filter((l) => {
+      const ts = new Date(l.timestamp).getTime();
+      return ts >= today.getTime() && ts < tomorrow.getTime() && 
+             (l.type === 'conflict' || l.type === 'warning' || l.type === 'delete');
+    }).length;
+  });
+
+  const duplicateScheduleModifications = computed(() => {
+    const scheduleUpdateCounts: Record<string, number> = {};
+    const oneHourAgo = Date.now() - 3600 * 1000;
+    
+    logs.value.forEach((l) => {
+      if (l.type === 'update' && l.scheduleId) {
+        const ts = new Date(l.timestamp).getTime();
+        if (ts >= oneHourAgo) {
+          scheduleUpdateCounts[l.scheduleId] = (scheduleUpdateCounts[l.scheduleId] || 0) + 1;
+        }
+      }
+    });
+    
+    return Object.values(scheduleUpdateCounts).filter((count) => count >= 2).length;
+  });
+
+  const conflictResolutionRate = computed(() => {
+    const totalConflicts = conflicts.value.length;
+    if (totalConflicts === 0) return 100;
+    
+    const resolvedConflictIds = new Set<string>();
+    logs.value.forEach((l) => {
+      if (l.type === 'update' && l.description && l.description.includes('冲突')) {
+        conflicts.value.forEach((c) => {
+          if (l.scheduleId === c.scheduleId) {
+            resolvedConflictIds.add(c.id);
+          }
+        });
+      }
+    });
+    
+    const resolvedCount = resolvedConflictIds.size;
+    return Math.round((resolvedCount / totalConflicts) * 100);
+  });
+
   const schedulesByBerth = computed(() => {
     const map: Record<string, BerthSchedule[]> = {};
     sortedBerths.value.forEach((b) => {
@@ -400,6 +446,13 @@ export const useScheduleStore = defineStore('schedule', () => {
   }
 
   function addLog(log: Partial<ScheduleLog>) {
+    let berthId = log.berthId;
+    if (!berthId && log.scheduleId) {
+      const schedule = schedules.value.find((s) => s.id === log.scheduleId);
+      if (schedule) {
+        berthId = schedule.berthId;
+      }
+    }
     const newLog: ScheduleLog = {
       id: `log-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       timestamp: new Date(),
@@ -408,6 +461,7 @@ export const useScheduleStore = defineStore('schedule', () => {
       description: log.description || '',
       scheduleId: log.scheduleId,
       shipId: log.shipId,
+      berthId,
       before: log.before,
       after: log.after,
     };
@@ -568,6 +622,9 @@ export const useScheduleStore = defineStore('schedule', () => {
     conflictShipCount,
     overtimeOperationsCount,
     berthTurnoverRate,
+    todayHighRiskOperations,
+    duplicateScheduleModifications,
+    conflictResolutionRate,
     schedulesByBerth,
     sortedSchedules,
     setSelectedSchedule,

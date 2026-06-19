@@ -10,6 +10,7 @@ export function useScheduleLogger() {
     options?: {
       scheduleId?: string;
       shipId?: string;
+      berthId?: string;
       before?: Record<string, unknown>;
       after?: Record<string, unknown>;
     },
@@ -19,6 +20,7 @@ export function useScheduleLogger() {
       description,
       scheduleId: options?.scheduleId,
       shipId: options?.shipId,
+      berthId: options?.berthId,
       before: options?.before,
       after: options?.after,
     });

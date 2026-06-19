@@ -4,7 +4,19 @@ import { useScheduleStore } from '../stores/schedule';
 import LogPanel from '../components/logs/LogPanel.vue';
 import ConflictAlert from '../components/logs/ConflictAlert.vue';
 import ShipDetailSidebar from '../components/sidebar/ShipDetailSidebar.vue';
-import { Anchor, LayoutDashboard, User, RefreshCw, Settings, Bell } from 'lucide-vue-next';
+import {
+  Anchor,
+  LayoutDashboard,
+  User,
+  RefreshCw,
+  Settings,
+  Bell,
+  AlertTriangle,
+  Repeat,
+  CheckCircle,
+  TrendingUp,
+  TrendingDown,
+} from 'lucide-vue-next';
 import { format } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
 import { computed, onMounted, ref } from 'vue';
@@ -20,6 +32,37 @@ onMounted(() => {
 });
 
 const conflictCount = computed(() => store.conflicts.filter((c) => c.severity === 'error').length);
+
+const auditStats = computed(() => [
+  {
+    label: '今日高风险操作',
+    value: store.todayHighRiskOperations,
+    icon: AlertTriangle,
+    color: 'text-harbor-red',
+    bgClass: 'bg-harbor-red/15',
+    borderClass: 'border-harbor-red/30',
+    trend: store.todayHighRiskOperations > 0 ? 'up' : 'down',
+  },
+  {
+    label: '重复修改计划',
+    value: store.duplicateScheduleModifications,
+    icon: Repeat,
+    color: 'text-harbor-orange',
+    bgClass: 'bg-harbor-orange/15',
+    borderClass: 'border-harbor-orange/30',
+    trend: store.duplicateScheduleModifications > 0 ? 'up' : 'down',
+  },
+  {
+    label: '冲突处理闭环率',
+    value: store.conflictResolutionRate,
+    suffix: '%',
+    icon: CheckCircle,
+    color: 'text-harbor-green',
+    bgClass: 'bg-harbor-green/15',
+    borderClass: 'border-harbor-green/30',
+    trend: store.conflictResolutionRate >= 80 ? 'up' : 'down',
+  },
+]);
 </script>
 
 <template>
@@ -108,8 +151,44 @@ const conflictCount = computed(() => store.conflicts.filter((c) => c.severity ==
         </div>
         <div class="col-span-4 space-y-4 h-full overflow-auto">
           <ConflictAlert v-if="store.conflicts.length > 0" :conflicts="store.conflicts" />
+          
           <div class="panel-border rounded-lg p-4">
-            <h3 class="font-mono text-sm font-semibold text-console-100 mb-3">日志统计</h3>
+            <h3 class="font-mono text-sm font-semibold text-console-100 mb-3 flex items-center gap-2">
+              <span class="w-1 h-4 bg-harbor-cyan rounded-full" />
+              审计指标
+            </h3>
+            <div class="space-y-2">
+              <div
+                v-for="stat in auditStats"
+                :key="stat.label"
+                :class="[
+                  'flex items-center justify-between p-3 rounded-lg border transition-all',
+                  stat.bgClass,
+                  stat.borderClass,
+                ]"
+              >
+                <div class="flex items-center gap-2">
+                  <component :is="stat.icon" :class="['w-4 h-4', stat.color]" />
+                  <span class="text-xs font-mono text-console-200">{{ stat.label }}</span>
+                </div>
+                <div class="flex items-center gap-2">
+                  <span :class="['text-sm font-bold font-mono', stat.color]">
+                    {{ stat.value }}{{ stat.suffix || '' }}
+                  </span>
+                  <component
+                    :is="stat.trend === 'up' ? TrendingUp : TrendingDown"
+                    :class="['w-3 h-3', stat.trend === 'up' ? 'text-harbor-cyan' : 'text-harbor-red']"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel-border rounded-lg p-4">
+            <h3 class="font-mono text-sm font-semibold text-console-100 mb-3 flex items-center gap-2">
+              <span class="w-1 h-4 bg-harbor-purple rounded-full" />
+              日志类型统计
+            </h3>
             <div class="space-y-2">
               <div v-for="(label, type) in { create: '创建', update: '更新', status_change: '状态变更', conflict: '冲突', warning: '警告' }" :key="type" class="flex items-center justify-between text-xs font-mono">
                 <span class="text-console-300">{{ label }}</span>
@@ -118,7 +197,10 @@ const conflictCount = computed(() => store.conflicts.filter((c) => c.severity ==
             </div>
           </div>
           <div class="panel-border rounded-lg p-4">
-            <h3 class="font-mono text-sm font-semibold text-console-100 mb-3">操作人</h3>
+            <h3 class="font-mono text-sm font-semibold text-console-100 mb-3 flex items-center gap-2">
+              <span class="w-1 h-4 bg-harbor-orange rounded-full" />
+              操作人统计
+            </h3>
             <div class="space-y-1.5">
               <div
                 v-for="op in [...new Set(store.logs.map(l => l.operator))]"
