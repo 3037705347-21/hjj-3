@@ -524,3 +524,105 @@ export interface Incident {
 }
 
 export type IncidentPermissionModule = 'incident_manage' | 'incident_handle';
+
+export type ExternalSyncStatus =
+  | 'pending'
+  | 'matched'
+  | 'unmatched'
+  | 'conflict'
+  | 'synced'
+  | 'failed'
+  | 'ignored';
+
+export const EXTERNAL_SYNC_STATUS_LABELS: Record<ExternalSyncStatus, string> = {
+  pending: '待处理',
+  matched: '已匹配',
+  unmatched: '未匹配',
+  conflict: '有冲突',
+  synced: '已同步',
+  failed: '同步失败',
+  ignored: '已忽略',
+};
+
+export type ExternalDataSource =
+  | 'port_logistics'
+  | 'customs'
+  | 'shipping_agency'
+  | 'vts'
+  | 'edi'
+  | 'manual_import';
+
+export const EXTERNAL_DATA_SOURCE_LABELS: Record<ExternalDataSource, string> = {
+  port_logistics: '港口物流系统',
+  customs: '海关系统',
+  shipping_agency: '船代系统',
+  vts: 'VTS系统',
+  edi: 'EDI报文',
+  manual_import: '手工导入',
+};
+
+export interface ExternalVesselSchedule {
+  id: string;
+  externalId: string;
+  externalShipName: string;
+  imo: string;
+  callSign?: string;
+  eta?: Date;
+  etd?: Date;
+  actualDynamicTime?: Date;
+  sourceSystem: ExternalDataSource;
+  matchedShipId?: string;
+  matchedShipName?: string;
+  syncStatus: ExternalSyncStatus;
+  lastSyncTime?: Date;
+  errorReason?: string;
+  cargoType?: CargoType;
+  cargoWeight?: number;
+  shipLength?: number;
+  shipWidth?: number;
+  draft?: number;
+  berthPreference?: string;
+  operator?: string;
+  voyageNo?: string;
+  importBatchId?: string;
+  createdAt: Date;
+  updatedAt: Date;
+  confirmedBy?: string;
+  confirmedAt?: Date;
+  remark?: string;
+}
+
+export interface ExternalImportRecord {
+  id: string;
+  batchNo: string;
+  sourceSystem: ExternalDataSource;
+  totalCount: number;
+  successCount: number;
+  failedCount: number;
+  matchedCount: number;
+  unmatchedCount: number;
+  conflictCount: number;
+  importTime: Date;
+  operator: string;
+  fileName?: string;
+  remark?: string;
+}
+
+export interface ExternalSyncLog {
+  id: string;
+  externalScheduleId: string;
+  action: 'match' | 'sync' | 'confirm' | 'ignore' | 'error';
+  timestamp: Date;
+  operator: string;
+  description: string;
+  before?: Record<string, unknown>;
+  after?: Record<string, unknown>;
+}
+
+export type ExternalPermissionModule = 'external_schedule_manage' | 'external_schedule_sync' | 'external_import_view';
+
+export const EXTERNAL_PERMISSION_MODULE_LABELS: Record<ExternalPermissionModule, string> = {
+  external_schedule_manage: '外部船期管理',
+  external_schedule_sync: '外部船期同步',
+  external_import_view: '导入记录查看',
+};

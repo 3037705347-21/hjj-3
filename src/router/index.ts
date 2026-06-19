@@ -90,6 +90,24 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/pages/incident/IncidentDetailPage.vue'),
     meta: { title: '事件详情', requireAuth: true },
   },
+  {
+    path: '/external-schedules',
+    name: 'external-schedule-list',
+    component: () => import('@/pages/external/ExternalScheduleListPage.vue'),
+    meta: { title: '外部船期接入', requireAuth: true },
+  },
+  {
+    path: '/external-schedules/:id',
+    name: 'external-schedule-detail',
+    component: () => import('@/pages/external/ExternalScheduleDetailPage.vue'),
+    meta: { title: '船期对照详情', requireAuth: true },
+  },
+  {
+    path: '/external-schedules/imports',
+    name: 'external-import-records',
+    component: () => import('@/pages/external/ImportRecordsPage.vue'),
+    meta: { title: '导入记录', requireAuth: true },
+  },
 ];
 
 const router = createRouter({
