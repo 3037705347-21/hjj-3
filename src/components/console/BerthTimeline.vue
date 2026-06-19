@@ -70,7 +70,7 @@ const currentTimeX = computed(() => {
   return berthLabelWidth + hours * getPixelPerHour();
 });
 
-const conflictsBySchedule = computed(() => {
+const conflictStats = computed(() => {
   const all = detectAllConflicts(
     store.schedules,
     store.ships,
@@ -78,17 +78,54 @@ const conflictsBySchedule = computed(() => {
     store.tides,
   );
   store.setConflicts(all);
-  const map: Record<string, typeof all> = {};
+
+  const scheduleConflicts: Record<string, typeof all> = {};
+  const errorCounts: Record<string, number> = {};
+  const warningCounts: Record<string, number> = {};
+  let totalErrors = 0;
+  let totalWarnings = 0;
+
   all.forEach((c) => {
-    if (!map[c.scheduleId]) map[c.scheduleId] = [];
-    map[c.scheduleId].push(c);
+    if (c.severity === 'error') totalErrors++;
+    else totalWarnings++;
+
+    if (!scheduleConflicts[c.scheduleId]) {
+      scheduleConflicts[c.scheduleId] = [];
+      errorCounts[c.scheduleId] = 0;
+      warningCounts[c.scheduleId] = 0;
+    }
+    scheduleConflicts[c.scheduleId].push(c);
+    if (c.severity === 'error') {
+      errorCounts[c.scheduleId]++;
+    } else {
+      warningCounts[c.scheduleId]++;
+    }
+
     if (c.relatedScheduleId) {
-      if (!map[c.relatedScheduleId]) map[c.relatedScheduleId] = [];
-      map[c.relatedScheduleId].push(c);
+      if (!scheduleConflicts[c.relatedScheduleId]) {
+        scheduleConflicts[c.relatedScheduleId] = [];
+        errorCounts[c.relatedScheduleId] = 0;
+        warningCounts[c.relatedScheduleId] = 0;
+      }
+      scheduleConflicts[c.relatedScheduleId].push(c);
+      if (c.severity === 'error') {
+        errorCounts[c.relatedScheduleId]++;
+      } else {
+        warningCounts[c.relatedScheduleId]++;
+      }
     }
   });
-  return map;
+
+  return {
+    scheduleConflicts,
+    errorCounts,
+    warningCounts,
+    totalErrors,
+    totalWarnings,
+  };
 });
+
+const conflictsBySchedule = computed(() => conflictStats.value.scheduleConflicts);
 
 function getBlockPosition(scheduleId: string, berthId: string, eta: Date, etd: Date) {
   const berthIndex = store.sortedBerths.findIndex((b) => b.id === berthId);
@@ -166,12 +203,21 @@ onMounted(() => {
       </div>
       <div class="flex items-center gap-2">
         <div
-          v-if="store.conflicts.length > 0"
+          v-if="conflictStats.totalErrors > 0"
           class="flex items-center gap-1.5 px-2 py-1 rounded bg-harbor-red/20 border border-harbor-red/40"
         >
           <AlertTriangle class="w-3 h-3 text-harbor-red" />
           <span class="text-[11px] font-mono text-harbor-red">
-            {{ store.conflicts.length }} 个冲突
+            {{ conflictStats.totalErrors }} 错误
+          </span>
+        </div>
+        <div
+          v-if="conflictStats.totalWarnings > 0"
+          class="flex items-center gap-1.5 px-2 py-1 rounded bg-harbor-yellow/20 border border-harbor-yellow/40"
+        >
+          <AlertTriangle class="w-3 h-3 text-harbor-yellow" />
+          <span class="text-[11px] font-mono text-harbor-yellow">
+            {{ conflictStats.totalWarnings }} 预警
           </span>
         </div>
         <button
@@ -298,6 +344,8 @@ onMounted(() => {
             ) || { left: 0, width: 0, top: 0, height: 0 }
           "
           :has-conflict="!!conflictsBySchedule[schedule.id]"
+          :error-count="conflictStats.errorCounts[schedule.id] || 0"
+          :warning-count="conflictStats.warningCounts[schedule.id] || 0"
           class="pointer-events-auto"
           @dragstart="startDrag"
           @click="handleShipClick"

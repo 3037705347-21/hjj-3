@@ -13,6 +13,8 @@ const props = defineProps<{
   top: number;
   height: number;
   hasConflict: boolean;
+  errorCount?: number;
+  warningCount?: number;
 }>();
 
 const emit = defineEmits<{
@@ -60,6 +62,20 @@ const statusColors: Record<string, string> = {
         <span class="text-[11px] font-mono font-semibold text-white truncate">
           {{ ship?.name || 'Unknown' }}
         </span>
+        <div v-if="errorCount && errorCount > 0" class="flex items-center gap-0.5 ml-auto">
+          <span
+            class="min-w-[16px] h-4 px-1 flex items-center justify-center rounded-full bg-harbor-red text-white text-[9px] font-mono font-bold"
+          >
+            {{ errorCount }}
+          </span>
+        </div>
+        <div v-else-if="warningCount && warningCount > 0" class="flex items-center gap-0.5 ml-auto">
+          <span
+            class="min-w-[16px] h-4 px-1 flex items-center justify-center rounded-full bg-harbor-yellow text-console-900 text-[9px] font-mono font-bold"
+          >
+            {{ warningCount }}
+          </span>
+        </div>
       </div>
       <div class="flex items-center justify-between gap-1 mt-1">
         <PriorityBadge v-if="ship" :priority="ship.priority" size="sm" />

@@ -43,6 +43,11 @@ const {
   checkLengthLimit,
   checkCargoMatch,
   checkTideWindow,
+  checkBerthMaintenance,
+  checkBufferTime,
+  checkTeamConflict,
+  checkDangerousCargoIsolation,
+  checkNightOperation,
 } = useConflictDetection();
 const { logUpdate } = useScheduleLogger();
 
@@ -216,6 +221,15 @@ function runConflictCheck(): ScheduleConflict[] {
     if (props.mode === 'edit' && s.id === props.scheduleId) return;
     const c = checkTimeOverlap(tempSchedule, s);
     if (c) result.push(c);
+
+    const bufferC = checkBufferTime(tempSchedule, s);
+    if (bufferC) result.push(bufferC);
+
+    const teamC = checkTeamConflict(tempSchedule, s);
+    if (teamC) result.push(teamC);
+
+    const dangerousC = checkDangerousCargoIsolation(tempSchedule, s, store.ships);
+    if (dangerousC) result.push(dangerousC);
   });
 
   const draftC = checkDraftLimit(tempSchedule, ship, berth);
@@ -230,6 +244,12 @@ function runConflictCheck(): ScheduleConflict[] {
   const tideC = checkTideWindow(tempSchedule, ship, berth, store.tides);
   if (tideC) result.push(tideC);
 
+  const maintenanceC = checkBerthMaintenance(tempSchedule, berth);
+  if (maintenanceC) result.push(maintenanceC);
+
+  const nightC = checkNightOperation(tempSchedule, ship);
+  if (nightC) result.push(nightC);
+
   return result;
 }
 
@@ -242,6 +262,11 @@ const conflictTypeLabels: Record<string, string> = {
   length_exceed: '船长超限',
   cargo_mismatch: '货种不匹配',
   tide_window: '潮汐窗口',
+  berth_maintenance: '泊位维修',
+  buffer_time_insufficient: '缓冲不足',
+  team_conflict: '班组冲突',
+  dangerous_cargo_isolation: '危货隔离',
+  night_operation_limit: '夜间限制',
 };
 
 async function onSubmit() {
@@ -377,6 +402,13 @@ async function onSubmit() {
                   </div>
                   <p class="text-xs font-mono text-console-200 mt-1">
                     {{ c.message }}
+                  </p>
+                  <p
+                    v-if="c.suggestedAction"
+                    class="text-[11px] font-mono text-harbor-cyan mt-1.5 flex items-center gap-1"
+                  >
+                    <span class="text-harbor-cyan/70">建议:</span>
+                    {{ c.suggestedAction }}
                   </p>
                 </div>
               </div>

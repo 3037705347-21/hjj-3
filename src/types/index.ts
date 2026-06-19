@@ -89,9 +89,15 @@ export interface ScheduleConflict {
     | 'draft_exceed'
     | 'length_exceed'
     | 'cargo_mismatch'
-    | 'tide_window';
+    | 'tide_window'
+    | 'berth_maintenance'
+    | 'buffer_time_insufficient'
+    | 'team_conflict'
+    | 'dangerous_cargo_isolation'
+    | 'night_operation_limit';
   severity: 'error' | 'warning';
   scheduleId: string;
   relatedScheduleId?: string;
   message: string;
+  suggestedAction?: string;
 }

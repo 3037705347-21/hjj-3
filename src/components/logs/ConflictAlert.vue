@@ -31,6 +31,11 @@ const conflictTypeLabels: Record<string, string> = {
   length_exceed: '船长超限',
   cargo_mismatch: '货种不匹配',
   tide_window: '潮汐窗口',
+  berth_maintenance: '泊位维修',
+  buffer_time_insufficient: '缓冲不足',
+  team_conflict: '班组冲突',
+  dangerous_cargo_isolation: '危货隔离',
+  night_operation_limit: '夜间限制',
 };
 </script>
 
@@ -80,6 +85,13 @@ const conflictTypeLabels: Record<string, string> = {
           </div>
           <p class="text-xs font-mono text-console-200 mt-1">
             {{ conflict.message }}
+          </p>
+          <p
+            v-if="conflict.suggestedAction"
+            class="text-[11px] font-mono text-harbor-cyan mt-1.5 flex items-center gap-1"
+          >
+            <span class="text-harbor-cyan/70">建议:</span>
+            {{ conflict.suggestedAction }}
           </p>
         </div>
         <button
