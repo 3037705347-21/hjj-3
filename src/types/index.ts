@@ -257,6 +257,62 @@ export const AUDIT_ACTION_LABELS: Record<AuditAction, string> = {
   log_export: '日志导出',
 };
 
+export type ApprovalType =
+  | 'key_schedule'
+  | 'dangerous_cargo'
+  | 'manual_adjust'
+  | 'berth_change'
+  | 'time_window_change'
+  | 'conflict_ignore';
+
+export const APPROVAL_TYPE_LABELS: Record<ApprovalType, string> = {
+  key_schedule: '重点计划',
+  dangerous_cargo: '危险货种计划',
+  manual_adjust: '人工调整计划',
+  berth_change: '泊位变更',
+  time_window_change: '关键时间窗修改',
+  conflict_ignore: '冲突忽略',
+};
+
+export type ApprovalStatus =
+  | 'pending'
+  | 'approved'
+  | 'rejected'
+  | 'cancelled';
+
+export const APPROVAL_STATUS_LABELS: Record<ApprovalStatus, string> = {
+  pending: '待审批',
+  approved: '已通过',
+  rejected: '已驳回',
+  cancelled: '已撤销',
+};
+
+export interface ApprovalRecord {
+  id: string;
+  approverId: string;
+  approverName: string;
+  action: 'approve' | 'reject';
+  opinion: string;
+  timestamp: Date;
+}
+
+export interface ApprovalOrder {
+  id: string;
+  approvalNo: string;
+  scheduleId: string;
+  initiatorId: string;
+  initiatorName: string;
+  type: ApprovalType;
+  status: ApprovalStatus;
+  opinion: string;
+  submitTime: Date;
+  processTime: Date | null;
+  conclusion: string | null;
+  records: ApprovalRecord[];
+  beforeSnapshot: Record<string, unknown> | null;
+  afterSnapshot: Record<string, unknown> | null;
+}
+
 export interface AuditLog {
   id: string;
   timestamp: Date;

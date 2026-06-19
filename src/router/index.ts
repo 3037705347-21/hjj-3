@@ -42,6 +42,18 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/pages/permission/PermissionAssignPage.vue'),
     meta: { title: '权限分配', requireAuth: true, permission: 'role_manage' as PermissionModule },
   },
+  {
+    path: '/approval',
+    name: 'approval-list',
+    component: () => import('@/pages/approval/ApprovalListPage.vue'),
+    meta: { title: '调度审批', requireAuth: true },
+  },
+  {
+    path: '/approval/:id',
+    name: 'approval-detail',
+    component: () => import('@/pages/approval/ApprovalDetailPage.vue'),
+    meta: { title: '审批详情', requireAuth: true },
+  },
 ];
 
 const router = createRouter({

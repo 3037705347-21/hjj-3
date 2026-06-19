@@ -1,33 +1,27 @@
 <script setup lang="ts">
+import { ref, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
-import { computed, onMounted, ref } from 'vue';
-import { useScheduleStore } from '../stores/schedule';
-import { useAuthStore } from '../stores/auth';
-import { USER_ROLE_LABELS } from '../types';
-import StatsCards from '../components/console/StatsCards.vue';
-import BerthTimeline from '../components/console/BerthTimeline.vue';
-import ShipListTable from '../components/console/ShipListTable.vue';
-import TideIndicator from '../components/console/TideIndicator.vue';
-import ShipDetailSidebar from '../components/sidebar/ShipDetailSidebar.vue';
-import LogPanel from '../components/logs/LogPanel.vue';
-import { Anchor, History, User, RefreshCw, Settings, Bell, Shield, Users, ClipboardCheck } from 'lucide-vue-next';
+import { useScheduleStore } from '../../stores/schedule';
+import { useAuthStore } from '../../stores/auth';
+import { useApprovalStore } from '../../stores/approval';
+import { USER_ROLE_LABELS } from '../../types';
+import ApprovalListTable from '../../components/approval/ApprovalListTable.vue';
+import ApprovalCreateModal from '../../components/approval/ApprovalCreateModal.vue';
+import ShipDetailSidebar from '../../components/sidebar/ShipDetailSidebar.vue';
+import {
+  Anchor,
+  History,
+  User,
+  RefreshCw,
+  Settings,
+  Bell,
+  Shield,
+  Users,
+  Plus,
+  ClipboardCheck,
+} from 'lucide-vue-next';
 import { format } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
-import type { ScheduleFilterCriteria, OperationStatus } from '../types';
-import { useApprovalStore } from '../stores/approval';
-
-type StatKey =
-  | 'shipsInPort'
-  | 'shipsWaiting'
-  | 'utilization'
-  | 'operations'
-  | 'avgWaiting'
-  | 'todayDeparted'
-  | 'conflictShips'
-  | 'overtimeOps'
-  | 'turnover';
-
-type ExternalFilter = Partial<ScheduleFilterCriteria> & { __token?: number };
 
 const store = useScheduleStore();
 const authStore = useAuthStore();
@@ -35,8 +29,7 @@ const approvalStore = useApprovalStore();
 const router = useRouter();
 
 const currentTime = ref(new Date());
-const tableFilter = ref<ExternalFilter | undefined>(undefined);
-let filterToken = 0;
+const showCreateModal = ref(false);
 
 onMounted(() => {
   setInterval(() => {
@@ -46,58 +39,38 @@ onMounted(() => {
 
 const conflictCount = computed(() => store.conflicts.filter((c) => c.severity === 'error').length);
 
-function applyTableFilter(criteria: Partial<ScheduleFilterCriteria>) {
-  filterToken++;
-  tableFilter.value = { ...criteria, __token: filterToken };
-}
+const pendingApprovalCount = computed(() => approvalStore.pendingCount);
 
-function onStatCardClick(key: StatKey) {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const tomorrow = new Date(today.getTime() + 24 * 3600 * 1000);
-  const todayStr = today.toISOString().slice(0, 16);
-  const tomorrowStr = tomorrow.toISOString().slice(0, 16);
-
-  switch (key) {
-    case 'shipsInPort':
-      applyTableFilter({ statusFilter: 'all' as OperationStatus | 'all' });
-      setTimeout(() => {
-        applyTableFilter({
-          statusFilter: 'all',
-          searchQuery: '',
-        });
-      }, 0);
-      break;
-    case 'shipsWaiting':
-      applyTableFilter({ statusFilter: 'anchored' });
-      break;
-    case 'utilization':
-      applyTableFilter({ statusFilter: 'all' });
-      break;
-    case 'operations':
-      applyTableFilter({
-        statusFilter: 'all',
-        etaStart: todayStr,
-        etaEnd: tomorrowStr,
-      });
-      break;
-    case 'avgWaiting':
-      applyTableFilter({ statusFilter: 'approaching' });
-      break;
-    case 'todayDeparted':
-      applyTableFilter({ statusFilter: 'departed' });
-      break;
-    case 'conflictShips':
-      applyTableFilter({ conflictFilter: 'has_conflict' });
-      break;
-    case 'overtimeOps':
-      router.push({ path: '/logs', query: { type: 'warning' } });
-      break;
-    case 'turnover':
-      applyTableFilter({ statusFilter: 'departed', etaStart: todayStr, etaEnd: tomorrowStr });
-      break;
-  }
-}
+const statsCards = computed(() => [
+  {
+    label: '待审批',
+    value: approvalStore.pendingCount,
+    color: 'text-harbor-yellow',
+    bgClass: 'bg-harbor-yellow/15',
+    borderClass: 'border-harbor-yellow/30',
+  },
+  {
+    label: '已通过',
+    value: approvalStore.approvedOrders.length,
+    color: 'text-harbor-green',
+    bgClass: 'bg-harbor-green/15',
+    borderClass: 'border-harbor-green/30',
+  },
+  {
+    label: '已驳回',
+    value: approvalStore.rejectedOrders.length,
+    color: 'text-harbor-red',
+    bgClass: 'bg-harbor-red/15',
+    borderClass: 'border-harbor-red/30',
+  },
+  {
+    label: '总计',
+    value: approvalStore.orders.length,
+    color: 'text-harbor-cyan',
+    bgClass: 'bg-harbor-cyan/15',
+    borderClass: 'border-harbor-cyan/30',
+  },
+]);
 </script>
 
 <template>
@@ -122,7 +95,7 @@ function onStatCardClick(key: StatKey) {
           <nav class="flex items-center gap-1">
             <button
               @click="router.push('/')"
-              class="px-3 py-1.5 rounded text-xs font-mono font-medium bg-harbor-cyan/15 text-harbor-cyan border border-harbor-cyan/30 shadow-glow-blue"
+              class="px-3 py-1.5 rounded text-xs font-mono font-medium text-console-300 border border-console-500/30 hover:bg-console-700/50 hover:text-console-100 transition-all flex items-center gap-1.5"
             >
               运营控制台
             </button>
@@ -134,17 +107,10 @@ function onStatCardClick(key: StatKey) {
               调度日志
             </button>
             <button
-              @click="router.push('/approval')"
-              class="px-3 py-1.5 rounded text-xs font-mono font-medium text-console-300 border border-console-500/30 hover:bg-console-700/50 hover:text-console-100 transition-all flex items-center gap-1.5 relative"
+              class="px-3 py-1.5 rounded text-xs font-mono font-medium bg-harbor-cyan/15 text-harbor-cyan border border-harbor-cyan/30 shadow-glow-blue flex items-center gap-1.5"
             >
               <ClipboardCheck class="w-3.5 h-3.5" />
               调度审批
-              <span
-                v-if="approvalStore.pendingCount > 0"
-                class="ml-0.5 min-w-[16px] h-[16px] px-0.5 rounded-full bg-harbor-yellow text-console-900 text-[8px] font-mono font-bold flex items-center justify-center"
-              >
-                {{ approvalStore.pendingCount }}
-              </span>
             </button>
             <button
               v-if="authStore.canManageUsers"
@@ -209,26 +175,48 @@ function onStatCardClick(key: StatKey) {
     </header>
 
     <main class="p-4 space-y-4">
-      <StatsCards @card-click="onStatCardClick" />
-
-      <div class="grid grid-cols-12 gap-4">
-        <div class="col-span-8 space-y-4">
-          <BerthTimeline />
-          <div class="grid grid-cols-3 gap-4">
-            <div class="col-span-2">
-              <TideIndicator />
-            </div>
-            <div class="h-48">
-              <LogPanel compact :limit="5" />
-            </div>
-          </div>
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <ClipboardCheck class="w-5 h-5 text-harbor-cyan" />
+          <h2 class="font-mono text-lg font-bold text-console-100">调度审批流</h2>
+          <span
+            v-if="pendingApprovalCount > 0"
+            class="px-2 py-0.5 rounded-full bg-harbor-yellow/20 text-harbor-yellow text-xs font-mono font-medium border border-harbor-yellow/40"
+          >
+            {{ pendingApprovalCount }} 条待审
+          </span>
         </div>
-        <div class="col-span-4 h-[640px]">
-          <ShipListTable :external-filter="tableFilter" />
+        <button
+          class="px-4 py-1.5 rounded text-xs font-mono font-medium bg-harbor-cyan/20 text-harbor-cyan border border-harbor-cyan/30 hover:bg-harbor-cyan/30 transition-all flex items-center gap-1.5"
+          @click="showCreateModal = true"
+        >
+          <Plus class="w-3.5 h-3.5" />
+          发起审批
+        </button>
+      </div>
+
+      <div class="grid grid-cols-4 gap-3">
+        <div
+          v-for="card in statsCards"
+          :key="card.label"
+          :class="[
+            'flex items-center justify-between p-3 rounded-lg border transition-all',
+            card.bgClass,
+            card.borderClass,
+          ]"
+        >
+          <span class="text-xs font-mono text-console-200">{{ card.label }}</span>
+          <span :class="['text-lg font-bold font-mono', card.color]">{{ card.value }}</span>
         </div>
       </div>
+
+      <ApprovalListTable />
     </main>
 
-    <ShipDetailSidebar />
+    <ApprovalCreateModal
+      :visible="showCreateModal"
+      @close="showCreateModal = false"
+      @submitted="() => {}"
+    />
   </div>
 </template>

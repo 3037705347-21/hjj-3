@@ -20,13 +20,16 @@ import {
   TrendingDown,
   Shield,
   Users,
+  ClipboardCheck,
 } from 'lucide-vue-next';
 import { format } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
 import { computed, onMounted, ref } from 'vue';
+import { useApprovalStore } from '../stores/approval';
 
 const store = useScheduleStore();
 const authStore = useAuthStore();
+const approvalStore = useApprovalStore();
 const router = useRouter();
 const currentTime = ref(new Date());
 
@@ -102,6 +105,19 @@ const auditStats = computed(() => [
               class="px-3 py-1.5 rounded text-xs font-mono font-medium bg-harbor-cyan/15 text-harbor-cyan border border-harbor-cyan/30 shadow-glow-blue"
             >
               调度日志
+            </button>
+            <button
+              @click="router.push('/approval')"
+              class="px-3 py-1.5 rounded text-xs font-mono font-medium text-console-300 border border-console-500/30 hover:bg-console-700/50 hover:text-console-100 transition-all flex items-center gap-1.5 relative"
+            >
+              <ClipboardCheck class="w-3.5 h-3.5" />
+              调度审批
+              <span
+                v-if="approvalStore.pendingCount > 0"
+                class="ml-0.5 min-w-[16px] h-[16px] px-0.5 rounded-full bg-harbor-yellow text-console-900 text-[8px] font-mono font-bold flex items-center justify-center"
+              >
+                {{ approvalStore.pendingCount }}
+              </span>
             </button>
             <button
               v-if="authStore.canManageUsers"
