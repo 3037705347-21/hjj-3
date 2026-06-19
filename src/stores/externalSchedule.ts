@@ -1,5 +1,7 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
+import { format } from 'date-fns';
+import { zhCN } from 'date-fns/locale';
 import type {
   ExternalVesselSchedule,
   ExternalImportRecord,
@@ -17,6 +19,11 @@ import {
 import { useScheduleStore } from './schedule';
 import { useAuthStore } from './auth';
 import { usePermissionStore } from './permission';
+
+function formatDate(date?: Date | string): string {
+  if (!date) return '-';
+  return format(new Date(date), 'MM-dd HH:mm', { locale: zhCN });
+}
 
 export const useExternalScheduleStore = defineStore('externalSchedule', () => {
   const externalSchedules = ref<ExternalVesselSchedule[]>(mockExternalSchedules);
@@ -143,7 +150,7 @@ export const useExternalScheduleStore = defineStore('externalSchedule', () => {
     return external;
   }
 
-  function confirmAndSync(externalId: string) {
+  function syncToSchedule(externalId: string, isAuto = false) {
     const scheduleStore = useScheduleStore();
     const external = externalSchedules.value.find((s) => s.id === externalId);
     if (!external || !external.matchedShipId) return null;
@@ -153,25 +160,63 @@ export const useExternalScheduleStore = defineStore('externalSchedule', () => {
     );
 
     const before = { ...external };
+    const ship = scheduleStore.getShipById(external.matchedShipId);
+    const shipName = ship?.name || external.matchedShipName || external.externalShipName;
+    let syncedScheduleId: string | null = null;
+    const changeDetails: string[] = [];
 
     if (existingSchedule) {
       const updates: Partial<BerthSchedule> = {};
       const changeFields: string[] = [];
+      const beforeFields: Record<string, unknown> = {};
+      const afterFields: Record<string, unknown> = {};
 
       if (external.eta && new Date(existingSchedule.eta).getTime() !== new Date(external.eta).getTime()) {
         updates.eta = external.eta;
         changeFields.push('ETA');
+        beforeFields.eta = existingSchedule.eta;
+        afterFields.eta = external.eta;
+        changeDetails.push(`ETA: ${formatDate(existingSchedule.eta)} → ${formatDate(external.eta)}`);
       }
       if (external.etd && new Date(existingSchedule.etd).getTime() !== new Date(external.etd).getTime()) {
         updates.etd = external.etd;
         changeFields.push('ETD');
+        beforeFields.etd = existingSchedule.etd;
+        afterFields.etd = external.etd;
+        changeDetails.push(`ETD: ${formatDate(existingSchedule.etd)} → ${formatDate(external.etd)}`);
+      }
+      if (external.actualDynamicTime && !existingSchedule.actualBerthing) {
+        updates.actualBerthing = external.actualDynamicTime;
+        changeFields.push('实际动态时间');
+        beforeFields.actualBerthing = existingSchedule.actualBerthing;
+        afterFields.actualBerthing = external.actualDynamicTime;
+        changeDetails.push(`实际动态时间: ${formatDate(external.actualDynamicTime)}`);
+      }
+      if (external.draft && existingSchedule.shipId) {
+        const shipData = scheduleStore.getShipById(existingSchedule.shipId);
+        if (shipData && Math.abs((shipData.draft || 0) - external.draft) > 0.1) {
+          changeDetails.push(`吃水: ${shipData.draft}m → ${external.draft}m`);
+        }
       }
 
       if (changeFields.length > 0) {
         scheduleStore.updateSchedule(existingSchedule.id, updates);
+        const logDesc = `[外部同步${isAuto ? '(自动)' : '(人工)'}] ${shipName} 同步字段变更: ${changeFields.join('、')}。${changeDetails.join('; ')}`;
+        scheduleStore.addLog({
+          type: 'update',
+          scheduleId: existingSchedule.id,
+          shipId: external.matchedShipId,
+          description: logDesc,
+          before: beforeFields,
+          after: afterFields,
+        });
+        syncedScheduleId = existingSchedule.id;
+      } else {
+        changeDetails.push('无字段变更');
       }
     } else if (external.eta && external.etd) {
       const berthId = findSuitableBerth(external);
+      const berth = scheduleStore.getBerthById(berthId);
       const newSchedule = scheduleStore.createSchedule({
         shipId: external.matchedShipId,
         berthId,
@@ -185,25 +230,55 @@ export const useExternalScheduleStore = defineStore('externalSchedule', () => {
           (new Date(external.etd).getTime() - new Date(external.eta).getTime()) / 3600000,
         ),
         delayThresholdMinutes: 30,
+        actualBerthing: external.actualDynamicTime,
+      });
+      syncedScheduleId = newSchedule.id;
+      changeDetails.push(`新建调度计划: 泊位=${berth?.name || berthId}, ETA=${formatDate(external.eta)}, ETD=${formatDate(external.etd)}`);
+      const logDesc = `[外部同步${isAuto ? '(自动)' : '(人工)'}] ${shipName} 新建调度计划。${changeDetails.join('; ')}`;
+      scheduleStore.addLog({
+        type: 'create',
+        scheduleId: newSchedule.id,
+        shipId: external.matchedShipId,
+        description: logDesc,
+        after: {
+          berthId,
+          eta: external.eta,
+          etd: external.etd,
+          source: 'api',
+        },
       });
     }
 
     external.syncStatus = 'synced';
     external.lastSyncTime = new Date();
-    external.confirmedBy = useAuthStore().currentUser?.displayName || '系统';
-    external.confirmedAt = new Date();
+    external.syncedScheduleId = syncedScheduleId || undefined;
+    if (!isAuto) {
+      external.confirmedBy = useAuthStore().currentUser?.displayName || '系统';
+      external.confirmedAt = new Date();
+    }
     external.updatedAt = new Date();
     external.errorReason = undefined;
 
     addSyncLog(
       externalId,
-      'confirm',
-      `人工确认并同步到调度计划`,
+      isAuto ? 'sync' : 'confirm',
+      isAuto
+        ? `自动同步到调度计划。${changeDetails.join('; ')}`
+        : `人工确认并同步到调度计划。${changeDetails.join('; ')}`,
       before as unknown as Record<string, unknown>,
-      { syncStatus: 'synced', confirmedBy: external.confirmedBy },
+      {
+        syncStatus: 'synced',
+        confirmedBy: external.confirmedBy,
+        syncedScheduleId,
+        changes: changeDetails,
+      },
     );
 
     return external;
+  }
+
+  function confirmAndSync(externalId: string) {
+    return syncToSchedule(externalId, false);
   }
 
   function findSuitableBerth(external: ExternalVesselSchedule): string {
@@ -245,7 +320,7 @@ export const useExternalScheduleStore = defineStore('externalSchedule', () => {
     if (!external) return;
 
     if (external.matchedShipId) {
-      return confirmAndSync(externalId);
+      return syncToSchedule(externalId, false);
     }
 
     return null;
@@ -279,12 +354,12 @@ export const useExternalScheduleStore = defineStore('externalSchedule', () => {
       }
 
       if (external.syncStatus === 'matched' || external.syncStatus === 'conflict') {
-        confirmAndSync(id);
+        syncToSchedule(id, external.syncStatus === 'matched');
         results.push({ id, success: true, message: '同步成功' });
       } else if (external.syncStatus === 'pending') {
         const matched = autoMatchByIMO(id);
         if (matched) {
-          confirmAndSync(id);
+          syncToSchedule(id, true);
           results.push({ id, success: true, message: '自动匹配并同步成功' });
         } else {
           results.push({ id, success: false, message: '无法自动匹配船舶' });
@@ -312,6 +387,7 @@ export const useExternalScheduleStore = defineStore('externalSchedule', () => {
     let conflictCount = 0;
     let successCount = 0;
     let failedCount = 0;
+    let syncedCount = 0;
 
     const scheduleStore = useScheduleStore();
 
@@ -329,6 +405,8 @@ export const useExternalScheduleStore = defineStore('externalSchedule', () => {
       const matchedShip = scheduleStore.ships.find(
         (ship) => ship.imo === external.imo || ship.name === external.externalShipName,
       );
+
+      let autoSynced = false;
 
       if (matchedShip) {
         external.matchedShipId = matchedShip.id;
@@ -354,6 +432,13 @@ export const useExternalScheduleStore = defineStore('externalSchedule', () => {
           external.syncStatus = 'matched';
           matchedCount++;
         }
+
+        if (external.syncStatus === 'matched' && external.eta && external.etd) {
+          externalSchedules.value.unshift(external);
+          syncToSchedule(id, true);
+          syncedCount++;
+          autoSynced = true;
+        }
       } else {
         external.syncStatus = 'unmatched';
         external.errorReason = '未找到匹配船舶';
@@ -361,7 +446,9 @@ export const useExternalScheduleStore = defineStore('externalSchedule', () => {
       }
 
       successCount++;
-      externalSchedules.value.unshift(external);
+      if (!autoSynced && !externalSchedules.value.find((s) => s.id === id)) {
+        externalSchedules.value.unshift(external);
+      }
     });
 
     const importRecord: ExternalImportRecord = {
@@ -374,6 +461,7 @@ export const useExternalScheduleStore = defineStore('externalSchedule', () => {
       matchedCount,
       unmatchedCount,
       conflictCount,
+      syncedCount,
       importTime: new Date(),
       operator,
     };
@@ -383,12 +471,12 @@ export const useExternalScheduleStore = defineStore('externalSchedule', () => {
     recordAudit(
       'schedule_write',
       batchId,
-      `导入 ${schedules.length} 条外部船期数据`,
+      `导入 ${schedules.length} 条外部船期数据，自动同步 ${syncedCount} 条`,
       null,
-      { count: schedules.length, sourceSystem },
+      { count: schedules.length, sourceSystem, syncedCount },
     );
 
-    return { batchId, batchNo, successCount, failedCount, matchedCount, unmatchedCount, conflictCount };
+    return { batchId, batchNo, successCount, failedCount, matchedCount, unmatchedCount, conflictCount, syncedCount };
   }
 
   function filterExternalSchedules(filters: {
@@ -436,6 +524,44 @@ export const useExternalScheduleStore = defineStore('externalSchedule', () => {
     selectedExternalId.value = id;
   }
 
+  const pendingConfirmationList = computed(() =>
+    externalSchedules.value.filter(
+      (s) => s.syncStatus === 'unmatched' || s.syncStatus === 'conflict',
+    ),
+  );
+
+  const pendingConfirmationCount = computed(() => pendingConfirmationList.value.length);
+
+  const unmatchedList = computed(() =>
+    externalSchedules.value.filter((s) => s.syncStatus === 'unmatched'),
+  );
+
+  const conflictList = computed(() =>
+    externalSchedules.value.filter((s) => s.syncStatus === 'conflict'),
+  );
+
+  function getPendingConfirmationList(filters?: {
+    type?: 'unmatched' | 'conflict' | 'all';
+    search?: string;
+  }) {
+    let result = [...pendingConfirmationList.value];
+    if (filters?.type && filters.type !== 'all') {
+      result = result.filter((s) => s.syncStatus === filters.type);
+    }
+    if (filters?.search) {
+      const searchLower = filters.search.toLowerCase();
+      result = result.filter(
+        (s) =>
+          s.externalShipName.toLowerCase().includes(searchLower) ||
+          s.imo.toLowerCase().includes(searchLower) ||
+          (s.matchedShipName && s.matchedShipName.toLowerCase().includes(searchLower)),
+      );
+    }
+    return result.sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    );
+  }
+
   return {
     externalSchedules,
     importRecords,
@@ -449,11 +575,17 @@ export const useExternalScheduleStore = defineStore('externalSchedule', () => {
     failedCount,
     matchedCount,
     pendingOrConflictCount,
+    pendingConfirmationList,
+    pendingConfirmationCount,
+    unmatchedList,
+    conflictList,
+    getPendingConfirmationList,
     getExternalById,
     getImportRecordById,
     getSyncLogsByExternalId,
     getExternalSchedulesByBatch,
     matchExternalSchedule,
+    syncToSchedule,
     confirmAndSync,
     ignoreExternalSchedule,
     retrySync,

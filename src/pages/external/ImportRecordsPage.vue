@@ -299,6 +299,9 @@ function viewExternalDetail(id: string) {
                   已匹配
                 </th>
                 <th class="px-4 py-2.5 text-[10px] font-mono text-console-400 uppercase tracking-wider font-medium text-center">
+                  已同步
+                </th>
+                <th class="px-4 py-2.5 text-[10px] font-mono text-console-400 uppercase tracking-wider font-medium text-center">
                   未匹配
                 </th>
                 <th class="px-4 py-2.5 text-[10px] font-mono text-console-400 uppercase tracking-wider font-medium text-center">
@@ -362,6 +365,11 @@ function viewExternalDetail(id: string) {
                     </span>
                   </td>
                   <td class="px-4 py-3 text-center">
+                    <span class="text-sm font-mono text-harbor-cyan">
+                      {{ record.syncedCount || 0 }}
+                    </span>
+                  </td>
+                  <td class="px-4 py-3 text-center">
                     <span class="text-sm font-mono text-harbor-orange">
                       {{ record.unmatchedCount }}
                     </span>
@@ -378,7 +386,7 @@ function viewExternalDetail(id: string) {
                   </td>
                 </tr>
                 <tr v-if="expandedBatchId === record.id" class="bg-console-800/20">
-                  <td colspan="10" class="px-4 py-3">
+                  <td colspan="11" class="px-4 py-3">
                     <div class="pl-4">
                       <h4 class="text-xs font-mono font-medium text-console-200 mb-3 flex items-center gap-2">
                         <FileText class="w-3.5 h-3.5 text-harbor-cyan" />

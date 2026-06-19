@@ -97,6 +97,12 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '外部船期接入', requireAuth: true },
   },
   {
+    path: '/external-schedules/pending',
+    name: 'external-pending-confirmation',
+    component: () => import('@/pages/external/PendingConfirmationListPage.vue'),
+    meta: { title: '待确认处理中心', requireAuth: true },
+  },
+  {
     path: '/external-schedules/:id',
     name: 'external-schedule-detail',
     component: () => import('@/pages/external/ExternalScheduleDetailPage.vue'),

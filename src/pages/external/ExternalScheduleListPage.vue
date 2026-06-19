@@ -26,6 +26,7 @@ import {
   Upload,
   FileText,
   ArrowRight,
+  AlertCircle,
 } from 'lucide-vue-next';
 import { format } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
@@ -145,6 +146,10 @@ function confirmImport() {
 
 function goToImportRecords() {
   router.push('/external-schedules/imports');
+}
+
+function goToPendingConfirmation() {
+  router.push('/external-schedules/pending');
 }
 
 function handleConfirmConfirmed(id: string) {
@@ -267,6 +272,14 @@ function handleConfirmConfirmed(id: string) {
           </span>
         </div>
         <div class="flex items-center gap-2">
+          <button
+            v-if="externalStore.pendingConfirmationCount > 0"
+            @click="goToPendingConfirmation"
+            class="px-3 py-1.5 rounded text-xs font-mono bg-harbor-orange/15 text-harbor-orange border border-harbor-orange/30 hover:bg-harbor-orange/25 transition-all flex items-center gap-1.5 animate-pulse"
+          >
+            <AlertCircle class="w-3.5 h-3.5" />
+            待确认处理 ({{ externalStore.pendingConfirmationCount }})
+          </button>
           <button
             @click="goToImportRecords"
             class="px-3 py-1.5 rounded text-xs font-mono text-console-300 border border-console-500/30 hover:bg-console-700/50 hover:text-console-100 transition-all flex items-center gap-1.5"

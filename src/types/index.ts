@@ -575,6 +575,7 @@ export interface ExternalVesselSchedule {
   matchedShipName?: string;
   syncStatus: ExternalSyncStatus;
   lastSyncTime?: Date;
+  syncedScheduleId?: string;
   errorReason?: string;
   cargoType?: CargoType;
   cargoWeight?: number;
@@ -602,6 +603,7 @@ export interface ExternalImportRecord {
   matchedCount: number;
   unmatchedCount: number;
   conflictCount: number;
+  syncedCount?: number;
   importTime: Date;
   operator: string;
   fileName?: string;
