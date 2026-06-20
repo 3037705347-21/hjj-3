@@ -18,7 +18,7 @@ import type {
   BerthMaintenancePeriod,
   MaintenanceType,
 } from '../types';
-import { MAINTENANCE_TYPE_LABELS } from '../types';
+import { MAINTENANCE_TYPE_LABELS, MAINTENANCE_IMPACT_SCOPE_LABELS } from '../types';
 import {
   mockShips,
   mockBerths,
@@ -874,6 +874,28 @@ export const useScheduleStore = defineStore('schedule', () => {
     return true;
   }
 
+  function getAffectedBerthIdsForMaintenance(period: BerthMaintenancePeriod): string[] {
+    const allBerths = sortedBerths.value;
+    const baseBerth = allBerths.find((b) => b.id === period.berthId);
+    if (!baseBerth) return [period.berthId];
+
+    if (period.impactScope === 'full_terminal') {
+      return allBerths.map((b) => b.id);
+    }
+
+    if (period.impactScope === 'berth_and_adjacent') {
+      const affected: string[] = [baseBerth.id];
+      const basePosition = baseBerth.position;
+      const prev = allBerths.find((b) => b.position === basePosition - 1);
+      if (prev) affected.push(prev.id);
+      const next = allBerths.find((b) => b.position === basePosition + 1);
+      if (next) affected.push(next.id);
+      return affected;
+    }
+
+    return [baseBerth.id];
+  }
+
   const activeMaintenancePeriods = computed(() =>
     maintenancePeriods.value.filter(
       (m) => m.status === 'planned' || m.status === 'in_progress',
@@ -883,14 +905,19 @@ export const useScheduleStore = defineStore('schedule', () => {
   const maintenancePeriodsByBerth = computed(() => {
     const map: Record<string, BerthMaintenancePeriod[]> = {};
     activeMaintenancePeriods.value.forEach((m) => {
-      if (!map[m.berthId]) map[m.berthId] = [];
-      map[m.berthId].push(m);
+      const affectedIds = getAffectedBerthIdsForMaintenance(m);
+      affectedIds.forEach((berthId) => {
+        if (!map[berthId]) map[berthId] = [];
+        map[berthId].push(m);
+      });
     });
     return map;
   });
 
   function getMaintenancePeriodsForBerth(berthId: string): BerthMaintenancePeriod[] {
-    return activeMaintenancePeriods.value.filter((m) => m.berthId === berthId);
+    return activeMaintenancePeriods.value.filter((m) =>
+      getAffectedBerthIdsForMaintenance(m).includes(berthId),
+    );
   }
 
   function isScheduleAffectedByMaintenance(scheduleId: string): boolean {
@@ -899,9 +926,11 @@ export const useScheduleStore = defineStore('schedule', () => {
     const sStart = new Date(schedule.eta).getTime();
     const sEnd = new Date(schedule.etd).getTime();
     return activeMaintenancePeriods.value.some((m) => {
+      const affectedBerthIds = getAffectedBerthIdsForMaintenance(m);
+      if (!affectedBerthIds.includes(schedule.berthId)) return false;
       const mStart = new Date(m.startTime).getTime();
       const mEnd = new Date(m.endTime).getTime();
-      return m.berthId === schedule.berthId && sStart < mEnd && sEnd > mStart;
+      return sStart < mEnd && sEnd > mStart;
     });
   }
 
@@ -911,9 +940,11 @@ export const useScheduleStore = defineStore('schedule', () => {
     const sStart = new Date(schedule.eta).getTime();
     const sEnd = new Date(schedule.etd).getTime();
     return activeMaintenancePeriods.value.filter((m) => {
+      const affectedBerthIds = getAffectedBerthIdsForMaintenance(m);
+      if (!affectedBerthIds.includes(schedule.berthId)) return false;
       const mStart = new Date(m.startTime).getTime();
       const mEnd = new Date(m.endTime).getTime();
-      return m.berthId === schedule.berthId && sStart < mEnd && sEnd > mStart;
+      return sStart < mEnd && sEnd > mStart;
     });
   }
 
@@ -925,9 +956,11 @@ export const useScheduleStore = defineStore('schedule', () => {
     const sStart = startTime.getTime();
     const sEnd = endTime.getTime();
     return activeMaintenancePeriods.value.some((m) => {
+      const affectedBerthIds = getAffectedBerthIdsForMaintenance(m);
+      if (!affectedBerthIds.includes(berthId)) return false;
       const mStart = new Date(m.startTime).getTime();
       const mEnd = new Date(m.endTime).getTime();
-      return m.berthId === berthId && sStart < mEnd && sEnd > mStart;
+      return sStart < mEnd && sEnd > mStart;
     });
   }
 
@@ -943,11 +976,16 @@ export const useScheduleStore = defineStore('schedule', () => {
     maintenancePeriods.value.push(period);
 
     const berth = berths.value.find((b) => b.id === data.berthId);
+    const affectedBerthIds = getAffectedBerthIdsForMaintenance(period);
+    const affectedBerths = affectedBerthIds
+      .map((id) => berths.value.find((b) => b.id === id)?.name)
+      .filter(Boolean)
+      .join('、');
     addLog({
       type: 'warning',
       berthId: data.berthId,
-      description: `新增泊位维护: ${berth?.name || data.berthId} ${MAINTENANCE_TYPE_LABELS[data.maintenanceType]} (${format(new Date(data.startTime), 'MM-dd HH:mm')} ~ ${format(new Date(data.endTime), 'MM-dd HH:mm')})`,
-      after: { ...period } as unknown as Record<string, unknown>,
+      description: `新增泊位维护: ${berth?.name || data.berthId} ${MAINTENANCE_TYPE_LABELS[data.maintenanceType]} [影响:${MAINTENANCE_IMPACT_SCOPE_LABELS[data.impactScope]} - ${affectedBerths}] (${format(new Date(data.startTime), 'MM-dd HH:mm')} ~ ${format(new Date(data.endTime), 'MM-dd HH:mm')})`,
+      after: { ...period, affectedBerthIds } as unknown as Record<string, unknown>,
     });
 
     checkExistingSchedulesForMaintenance(period);
@@ -961,11 +999,16 @@ export const useScheduleStore = defineStore('schedule', () => {
     Object.assign(period, updates, { updatedAt: new Date() });
 
     const berth = berths.value.find((b) => b.id === period.berthId);
+    const affectedBerthIds = getAffectedBerthIdsForMaintenance(period);
+    const affectedBerths = affectedBerthIds
+      .map((bid) => berths.value.find((b) => b.id === bid)?.name)
+      .filter(Boolean)
+      .join('、');
     addLog({
       type: 'warning',
       berthId: period.berthId,
-      description: `更新泊位维护: ${berth?.name || period.berthId}`,
-      after: { ...updates } as unknown as Record<string, unknown>,
+      description: `更新泊位维护: ${berth?.name || period.berthId} [影响:${MAINTENANCE_IMPACT_SCOPE_LABELS[period.impactScope]} - ${affectedBerths}]`,
+      after: { ...updates, affectedBerthIds } as unknown as Record<string, unknown>,
     });
 
     checkExistingSchedulesForMaintenance(period);
@@ -976,30 +1019,39 @@ export const useScheduleStore = defineStore('schedule', () => {
     if (idx === -1) return;
     const period = maintenancePeriods.value[idx];
     const berth = berths.value.find((b) => b.id === period.berthId);
+    const affectedBerthIds = getAffectedBerthIdsForMaintenance(period);
+    const affectedBerths = affectedBerthIds
+      .map((bid) => berths.value.find((b) => b.id === bid)?.name)
+      .filter(Boolean)
+      .join('、');
     maintenancePeriods.value.splice(idx, 1);
     addLog({
       type: 'warning',
       berthId: period.berthId,
-      description: `删除泊位维护: ${berth?.name || period.berthId} ${MAINTENANCE_TYPE_LABELS[period.maintenanceType]}`,
-      before: { ...period } as unknown as Record<string, unknown>,
+      description: `删除泊位维护: ${berth?.name || period.berthId} ${MAINTENANCE_TYPE_LABELS[period.maintenanceType]} [影响:${MAINTENANCE_IMPACT_SCOPE_LABELS[period.impactScope]} - ${affectedBerths}]`,
+      before: { ...period, affectedBerthIds } as unknown as Record<string, unknown>,
     });
   }
 
   function checkExistingSchedulesForMaintenance(period: BerthMaintenancePeriod) {
     const mStart = new Date(period.startTime).getTime();
     const mEnd = new Date(period.endTime).getTime();
-    const berth = berths.value.find((b) => b.id === period.berthId);
+    const affectedBerthIds = getAffectedBerthIdsForMaintenance(period);
+    const affectedBerths = affectedBerthIds
+      .map((id) => berths.value.find((b) => b.id === id)?.name || id)
+      .join('、');
 
     schedules.value.forEach((s) => {
-      if (s.berthId !== period.berthId) return;
+      if (!affectedBerthIds.includes(s.berthId)) return;
       if (s.status === 'departed') return;
       const sStart = new Date(s.eta).getTime();
       const sEnd = new Date(s.etd).getTime();
       if (sStart < mEnd && sEnd > mStart) {
         const ship = ships.value.find((sh) => sh.id === s.shipId);
+        const scheduleBerth = berths.value.find((b) => b.id === s.berthId);
         logger.logWarning(
           s.id,
-          `${ship?.name || s.shipId} 与泊位维护冲突: ${berth?.name || period.berthId} ${MAINTENANCE_TYPE_LABELS[period.maintenanceType]} (${format(new Date(period.startTime), 'MM-dd HH:mm')} ~ ${format(new Date(period.endTime), 'MM-dd HH:mm')})`,
+          `${ship?.name || s.shipId} (${scheduleBerth?.name || s.berthId}) 受泊位维护影响: 维护${MAINTENANCE_TYPE_LABELS[period.maintenanceType]} [影响:${MAINTENANCE_IMPACT_SCOPE_LABELS[period.impactScope]} - ${affectedBerths}] (${format(new Date(period.startTime), 'MM-dd HH:mm')} ~ ${format(new Date(period.endTime), 'MM-dd HH:mm')})`,
         );
       }
     });
@@ -1069,6 +1121,7 @@ export const useScheduleStore = defineStore('schedule', () => {
     maintenancePeriods,
     activeMaintenancePeriods,
     maintenancePeriodsByBerth,
+    getAffectedBerthIdsForMaintenance,
     getMaintenancePeriodsForBerth,
     isScheduleAffectedByMaintenance,
     getMaintenanceConflictsForSchedule,

@@ -258,13 +258,21 @@ function handleSaved(schedule: BerthSchedule) {
 watch(
   () => store.schedules.map((s) => [s.berthId, s.eta, s.etd]),
   () => {
-    detectAllConflicts(store.schedules, store.ships, store.berths, store.tides);
+    detectAllConflicts(store.schedules, store.ships, store.berths, store.tides, store.activeMaintenancePeriods);
+  },
+  { deep: true },
+);
+
+watch(
+  () => store.maintenancePeriods.map((m) => [m.berthId, m.startTime, m.endTime, m.impactScope, m.status]),
+  () => {
+    detectAllConflicts(store.schedules, store.ships, store.berths, store.tides, store.activeMaintenancePeriods);
   },
   { deep: true },
 );
 
 onMounted(() => {
-  detectAllConflicts(store.schedules, store.ships, store.berths, store.tides);
+  detectAllConflicts(store.schedules, store.ships, store.berths, store.tides, store.activeMaintenancePeriods);
 });
 </script>
 
@@ -423,28 +431,48 @@ onMounted(() => {
       </div>
 
       <div class="absolute top-0 left-0 pointer-events-none" style="margin-left: 0">
-        <div
-          v-for="period in store.activeMaintenancePeriods"
-          :key="`maint-${period.id}`"
-          class="absolute rounded pointer-events-none z-15"
-          :style="{
-            ...getMaintenanceBlockPosition(period.berthId, new Date(period.startTime), new Date(period.endTime)),
-            borderLeft: '3px solid rgba(234, 179, 8, 0.8)',
-          }"
-          v-bind="getMaintenanceBlockPosition(period.berthId, new Date(period.startTime), new Date(period.endTime)) || { left: 0, width: 0, top: 0, height: 0 }"
-        >
-          <div class="h-full bg-harbor-orange/15 border border-harbor-orange/30 border-l-0 rounded-r flex items-center justify-center gap-1 px-1.5 overflow-hidden">
-            <ShieldAlert class="w-3 h-3 text-harbor-orange flex-shrink-0" />
-            <div class="flex flex-col min-w-0">
-              <span class="text-[9px] font-mono text-harbor-orange font-semibold truncate">
-                维护中
-              </span>
-              <span class="text-[8px] font-mono text-harbor-orange/70 truncate">
-                {{ MAINTENANCE_TYPE_LABELS[period.maintenanceType] }}
-              </span>
+        <template v-for="period in store.activeMaintenancePeriods" :key="`maint-group-${period.id}`">
+          <div
+            v-for="berthId in store.getAffectedBerthIdsForMaintenance(period)"
+            :key="`maint-${period.id}-${berthId}`"
+            class="absolute rounded pointer-events-none z-15"
+            v-bind="getMaintenanceBlockPosition(berthId, new Date(period.startTime), new Date(period.endTime)) || { left: 0, width: 0, top: 0, height: 0 }"
+          >
+            <div
+              class="h-full border rounded-r flex items-center justify-center gap-1 px-1.5 overflow-hidden"
+              :class="[
+                berthId === period.berthId
+                  ? 'bg-harbor-orange/15 border-harbor-orange/40'
+                  : 'bg-harbor-orange/8 border-harbor-orange/20 border-dashed',
+              ]"
+            >
+              <ShieldAlert
+                class="flex-shrink-0"
+                :class="[
+                  berthId === period.berthId ? 'w-3 h-3 text-harbor-orange' : 'w-2.5 h-2.5 text-harbor-orange/60',
+                ]"
+              />
+              <div class="flex flex-col min-w-0">
+                <span
+                  class="font-mono font-semibold truncate"
+                  :class="[
+                    berthId === period.berthId ? 'text-[9px] text-harbor-orange' : 'text-[8px] text-harbor-orange/70',
+                  ]"
+                >
+                  {{ berthId === period.berthId ? '维护中' : '受影响' }}
+                </span>
+                <span
+                  class="font-mono truncate"
+                  :class="[
+                    berthId === period.berthId ? 'text-[8px] text-harbor-orange/70' : 'text-[7px] text-harbor-orange/50',
+                  ]"
+                >
+                  {{ MAINTENANCE_TYPE_LABELS[period.maintenanceType] }}
+                </span>
+              </div>
             </div>
           </div>
-        </div>
+        </template>
 
         <TimelineShipBlock
           v-for="schedule in store.schedules"

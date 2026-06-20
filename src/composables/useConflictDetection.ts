@@ -6,9 +6,35 @@ import type {
   TideRecord,
   CargoType,
   BerthMaintenancePeriod,
+  MaintenanceImpactScope,
 } from '../types';
+import { MAINTENANCE_TYPE_LABELS, MAINTENANCE_IMPACT_SCOPE_LABELS } from '../types';
 
 export function useConflictDetection() {
+  function getAffectedBerthIdsForMaintenance(
+    period: BerthMaintenancePeriod,
+    berths: Berth[],
+  ): string[] {
+    const sorted = [...berths].sort((a, b) => a.position - b.position);
+    const baseBerth = sorted.find((b) => b.id === period.berthId);
+    if (!baseBerth) return [period.berthId];
+
+    if (period.impactScope === 'full_terminal') {
+      return sorted.map((b) => b.id);
+    }
+
+    if (period.impactScope === 'berth_and_adjacent') {
+      const affected: string[] = [baseBerth.id];
+      const basePosition = baseBerth.position;
+      const prev = sorted.find((b) => b.position === basePosition - 1);
+      if (prev) affected.push(prev.id);
+      const next = sorted.find((b) => b.position === basePosition + 1);
+      if (next) affected.push(next.id);
+      return affected;
+    }
+
+    return [baseBerth.id];
+  }
   function detectAllConflicts(
     schedules: BerthSchedule[],
     ships: Ship[],
@@ -77,7 +103,7 @@ export function useConflictDetection() {
     schedules.forEach((schedule) => {
       const berth = berths.find((b) => b.id === schedule.berthId);
       if (!berth) return;
-      const mConflict = checkMaintenancePeriodOverlap(schedule, berth, activeMaintenance);
+      const mConflict = checkMaintenancePeriodOverlap(schedule, berth, activeMaintenance, berths);
       if (mConflict) conflicts.push(mConflict);
     });
 
@@ -410,23 +436,28 @@ export function useConflictDetection() {
     schedule: BerthSchedule,
     berth: Berth,
     maintenancePeriods: BerthMaintenancePeriod[],
+    berths: Berth[] = [],
   ): ScheduleConflict | null {
     const sStart = new Date(schedule.eta).getTime();
     const sEnd = new Date(schedule.etd).getTime();
 
     for (const m of maintenancePeriods) {
-      if (m.berthId !== schedule.berthId) continue;
+      const affectedBerthIds = getAffectedBerthIdsForMaintenance(m, berths.length > 0 ? berths : [berth]);
+      if (!affectedBerthIds.includes(schedule.berthId)) continue;
       const mStart = new Date(m.startTime).getTime();
       const mEnd = new Date(m.endTime).getTime();
       if (sStart < mEnd && sEnd > mStart) {
         const overlapHours = Math.round((Math.min(sEnd, mEnd) - Math.max(sStart, mStart)) / 3600000);
+        const affectedBerths = affectedBerthIds
+          .map((id) => berths.find((b) => b.id === id)?.name || id)
+          .join('、');
         return {
           id: `conflict-maint-period-${schedule.id}-${m.id}`,
           type: 'berth_maintenance',
           severity: 'error',
           scheduleId: schedule.id,
-          message: `泊位维护冲突: ${berth.name}在维护时段内（${new Date(m.startTime).toLocaleString('zh-CN')} ~ ${new Date(m.endTime).toLocaleString('zh-CN')}），重叠${overlapHours}小时`,
-          suggestedAction: `建议更换至其他可用泊位，或调整作业时间避开维护时段`,
+          message: `泊位维护冲突: ${MAINTENANCE_TYPE_LABELS[m.maintenanceType]} [影响:${MAINTENANCE_IMPACT_SCOPE_LABELS[m.impactScope]} - ${affectedBerths}]（${new Date(m.startTime).toLocaleString('zh-CN')} ~ ${new Date(m.endTime).toLocaleString('zh-CN')}），重叠${overlapHours}小时`,
+          suggestedAction: `建议更换至未受影响的泊位，或调整作业时间避开维护时段`,
         };
       }
     }

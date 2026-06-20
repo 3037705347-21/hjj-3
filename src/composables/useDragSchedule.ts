@@ -200,7 +200,7 @@ export function useDragSchedule(
       }
 
       const activeMaintenance: BerthMaintenancePeriod[] = store.activeMaintenancePeriods;
-      const periodConflict = checkMaintenancePeriodOverlap(tempSchedule, berth, activeMaintenance);
+      const periodConflict = checkMaintenancePeriodOverlap(tempSchedule, berth, activeMaintenance, store.sortedBerths);
       if (periodConflict) {
         berthAvailable = false;
         if (periodConflict.severity === 'error') errors.push(periodConflict);
