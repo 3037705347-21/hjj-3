@@ -3,7 +3,6 @@ import { ref, computed, watch, reactive } from 'vue';
 import type { BerthSchedule, OperationStatus, ScheduleSource, ScheduleConflict, ProgressMode } from '../../types';
 import { useScheduleStore } from '../../stores/schedule';
 import { useConflictDetection } from '../../composables/useConflictDetection';
-import { useScheduleLogger } from '../../composables/useScheduleLogger';
 import {
   X,
   Save,
@@ -49,7 +48,6 @@ const {
   checkDangerousCargoIsolation,
   checkNightOperation,
 } = useConflictDetection();
-const { logUpdate } = useScheduleLogger();
 
 type FormData = {
   shipId: string;
@@ -307,18 +305,8 @@ async function onSubmit() {
   if (props.mode === 'create') {
     saved = store.createSchedule(payload);
   } else if (props.mode === 'edit' && props.scheduleId) {
-    const original = store.schedules.find((s) => s.id === props.scheduleId);
-    const before = { ...original } as unknown as Record<string, unknown>;
     store.updateSchedule(props.scheduleId, payload as Partial<BerthSchedule>);
     saved = store.schedules.find((s) => s.id === props.scheduleId) || null;
-    if (saved) {
-      logUpdate(
-        saved.id,
-        saved.shipId,
-        before,
-        { ...payload } as unknown as Record<string, unknown>,
-      );
-    }
   }
 
   submitting.value = false;

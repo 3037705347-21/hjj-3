@@ -664,6 +664,13 @@ export const useScheduleStore = defineStore('schedule', () => {
     if (!latest || latest.id !== logId) {
       return { canRollback: false, reason: '仅允许回退最近一次有效变更记录' };
     }
+    const scheduleCurrent = schedule as unknown as Record<string, unknown>;
+    const stillDiffers = Object.keys(targetLog.after).some(
+      (key) => JSON.stringify(scheduleCurrent[key]) !== JSON.stringify(targetLog.before![key]),
+    );
+    if (!stillDiffers) {
+      return { canRollback: false, reason: '该变更已被回退，当前值与变更前一致' };
+    }
     return { canRollback: true };
   }
 
