@@ -94,7 +94,8 @@ export type LogType =
   | 'delete'
   | 'status_change'
   | 'conflict'
-  | 'warning';
+  | 'warning'
+  | 'rollback';
 
 export interface ScheduleLog {
   id: string;

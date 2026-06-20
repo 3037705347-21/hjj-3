@@ -22,6 +22,10 @@ import {
   Anchor,
   Calendar,
   Eye,
+  Undo2,
+  XCircle,
+  CheckCircle2,
+  AlertCircle as AlertCircleIcon,
 } from 'lucide-vue-next';
 import { format } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
@@ -52,6 +56,9 @@ const timeEnd = ref<string | null>(null);
 const showAdvancedFilter = ref(false);
 const selectedLog = ref<ScheduleLog | null>(null);
 const showDetailModal = ref(false);
+const showRollbackConfirm = ref(false);
+const rollbackTargetLog = ref<ScheduleLog | null>(null);
+const rollbackResult = ref<{ success: boolean; message: string } | null>(null);
 
 const logTypeMeta: Record<LogType, { label: string; icon: typeof Clock; color: string; bgClass: string }> = {
   create: { label: '创建', icon: PlusCircle, color: 'text-harbor-green', bgClass: 'bg-harbor-green/15 border-harbor-green/30' },
@@ -60,6 +67,7 @@ const logTypeMeta: Record<LogType, { label: string; icon: typeof Clock; color: s
   status_change: { label: '状态变更', icon: RotateCcw, color: 'text-harbor-purple', bgClass: 'bg-harbor-purple/15 border-harbor-purple/30' },
   conflict: { label: '冲突', icon: AlertTriangle, color: 'text-harbor-red', bgClass: 'bg-harbor-red/15 border-harbor-red/30' },
   warning: { label: '警告', icon: AlertCircle, color: 'text-harbor-yellow', bgClass: 'bg-harbor-yellow/15 border-harbor-yellow/30' },
+  rollback: { label: '回退', icon: ResetIcon, color: 'text-harbor-orange', bgClass: 'bg-harbor-orange/15 border-harbor-orange/30' },
 };
 
 const allOperators = computed(() => {
@@ -180,6 +188,35 @@ function closeDetailModal() {
   selectedLog.value = null;
 }
 
+function isRollbackable(log: ScheduleLog): boolean {
+  if (log.type !== 'update' && log.type !== 'status_change') return false;
+  if (!log.before || !log.after) return false;
+  if (!log.scheduleId) return false;
+  return store.canRollbackLog(log.id).canRollback;
+}
+
+function requestRollback(log: ScheduleLog) {
+  rollbackTargetLog.value = log;
+  rollbackResult.value = null;
+  showRollbackConfirm.value = true;
+}
+
+function cancelRollback() {
+  showRollbackConfirm.value = false;
+  rollbackTargetLog.value = null;
+  rollbackResult.value = null;
+}
+
+function executeRollback() {
+  if (!rollbackTargetLog.value) return;
+  const result = store.rollbackSchedule(rollbackTargetLog.value.id);
+  if (result.success) {
+    rollbackResult.value = { success: true, message: '回退成功，已恢复变更前的字段值' };
+  } else {
+    rollbackResult.value = { success: false, message: result.reason || '回退失败' };
+  }
+}
+
 function resetFilters() {
   typeFilter.value = 'all';
   searchQuery.value = '';
@@ -296,6 +333,7 @@ function exportLogs() {
             <option value="status_change">状态变更</option>
             <option value="conflict">冲突</option>
             <option value="warning">警告</option>
+            <option value="rollback">回退</option>
           </select>
         </div>
       </div>
@@ -426,14 +464,24 @@ function exportLogs() {
             </div>
           </div>
         </div>
-        <button
-          v-if="log.before || log.after"
-          @click.stop="openLogDetail(log)"
-          class="opacity-0 group-hover:opacity-100 flex items-center gap-1 px-2 py-1 text-[10px] font-mono text-console-400 border border-console-500/40 rounded hover:text-harbor-cyan hover:border-harbor-cyan/50 transition-all shrink-0"
-        >
-          <Eye class="w-3 h-3" />
-          详情
-        </button>
+        <div class="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-all shrink-0">
+          <button
+            v-if="log.before || log.after"
+            @click.stop="openLogDetail(log)"
+            class="flex items-center gap-1 px-2 py-1 text-[10px] font-mono text-console-400 border border-console-500/40 rounded hover:text-harbor-cyan hover:border-harbor-cyan/50 transition-all"
+          >
+            <Eye class="w-3 h-3" />
+            查看变更
+          </button>
+          <button
+            v-if="(log.type === 'update' || log.type === 'status_change') && isRollbackable(log)"
+            @click.stop="requestRollback(log)"
+            class="flex items-center gap-1 px-2 py-1 text-[10px] font-mono text-harbor-orange border border-harbor-orange/30 rounded hover:bg-harbor-orange/10 transition-all"
+          >
+            <Undo2 class="w-3 h-3" />
+            回退
+          </button>
+        </div>
       </div>
     </div>
   </div>
@@ -441,5 +489,75 @@ function exportLogs() {
     :log="selectedLog"
     :visible="showDetailModal"
     @close="closeDetailModal"
+    @rollback="requestRollback"
   />
+
+  <Teleport to="body">
+    <Transition name="modal">
+      <div
+        v-if="showRollbackConfirm && rollbackTargetLog"
+        class="fixed inset-0 z-50 flex items-center justify-center p-4"
+        @click.self="cancelRollback"
+      >
+        <div class="absolute inset-0 bg-console-900/80 backdrop-blur-sm" />
+        <div class="relative panel-border rounded-xl bg-console-800/95 w-full max-w-md shadow-2xl z-10">
+          <div class="flex items-center justify-between px-5 py-4 border-b border-console-500/20">
+            <h3 class="font-mono text-sm font-semibold text-console-100 flex items-center gap-2">
+              <Undo2 class="w-4 h-4 text-harbor-orange" />
+              确认回退变更
+            </h3>
+            <button
+              @click="cancelRollback"
+              class="w-7 h-7 rounded flex items-center justify-center text-console-400 hover:text-console-100 hover:bg-console-700/50 transition-all"
+            >
+              <XCircle class="w-4 h-4" />
+            </button>
+          </div>
+
+          <div class="p-5 space-y-4">
+            <div v-if="!rollbackResult" class="space-y-3">
+              <div class="flex items-start gap-2 p-3 rounded-lg bg-harbor-orange/10 border border-harbor-orange/30">
+                <AlertCircleIcon class="w-4 h-4 text-harbor-orange shrink-0 mt-0.5" />
+                <div class="text-xs font-mono text-console-200 leading-relaxed">
+                  <p class="font-medium text-harbor-orange mb-1">此操作将回退以下变更</p>
+                  <p>{{ rollbackTargetLog.description }}</p>
+                  <p class="mt-1 text-console-400">
+                    操作人: {{ rollbackTargetLog.operator }} |
+                    {{ formatTimestamp(rollbackTargetLog.timestamp) }}
+                  </p>
+                </div>
+              </div>
+              <p class="text-xs font-mono text-console-300">
+                将恢复以下字段至变更前的值: berthId、eta、etd、status、operationProgress、operationTeam、remarks。回退后将自动生成一条回退日志记录，保证日志链完整。
+              </p>
+            </div>
+
+            <div v-else :class="['flex items-center gap-2 p-3 rounded-lg', rollbackResult.success ? 'bg-harbor-green/10 border border-harbor-green/30' : 'bg-harbor-red/10 border border-harbor-red/30']">
+              <component :is="rollbackResult.success ? CheckCircle2 : AlertCircleIcon" :class="['w-4 h-4 shrink-0', rollbackResult.success ? 'text-harbor-green' : 'text-harbor-red']" />
+              <span :class="['text-xs font-mono', rollbackResult.success ? 'text-harbor-green' : 'text-harbor-red']">
+                {{ rollbackResult.message }}
+              </span>
+            </div>
+          </div>
+
+          <div class="px-5 py-4 border-t border-console-500/20 flex justify-end gap-2">
+            <button
+              @click="cancelRollback"
+              class="px-4 py-1.5 text-xs font-mono text-console-300 border border-console-500/40 rounded hover:text-console-100 hover:border-console-400/50 transition-all"
+            >
+              {{ rollbackResult ? '关闭' : '取消' }}
+            </button>
+            <button
+              v-if="!rollbackResult"
+              @click="executeRollback"
+              class="px-4 py-1.5 text-xs font-mono bg-harbor-orange/20 text-harbor-orange border border-harbor-orange/30 rounded hover:bg-harbor-orange/30 transition-all flex items-center gap-1.5"
+            >
+              <Undo2 class="w-3 h-3" />
+              确认回退
+            </button>
+          </div>
+        </div>
+      </div>
+    </Transition>
+  </Teleport>
 </template>

@@ -605,6 +605,100 @@ export const useScheduleStore = defineStore('schedule', () => {
     });
   }
 
+  const ROLLBACK_FIELDS = ['berthId', 'eta', 'etd', 'status', 'operationProgress', 'operationTeam', 'remarks'] as const;
+
+  function canRollbackLog(logId: string): { canRollback: boolean; reason?: string } {
+    const targetLog = logs.value.find((l) => l.id === logId);
+    if (!targetLog) {
+      return { canRollback: false, reason: '日志记录不存在' };
+    }
+    if (targetLog.type !== 'update' && targetLog.type !== 'status_change') {
+      return { canRollback: false, reason: '仅更新和状态变更类型的日志支持回退' };
+    }
+    if (!targetLog.before || !targetLog.after) {
+      return { canRollback: false, reason: '该日志缺少变更前后数据' };
+    }
+    if (!targetLog.scheduleId) {
+      return { canRollback: false, reason: '该日志未关联调度计划' };
+    }
+    const schedule = schedules.value.find((s) => s.id === targetLog.scheduleId);
+    if (!schedule) {
+      return { canRollback: false, reason: '关联的调度计划已不存在' };
+    }
+    const latestEffectiveLog = logs.value.find(
+      (l) => l.scheduleId === targetLog.scheduleId && (l.type === 'update' || l.type === 'status_change'),
+    );
+    if (!latestEffectiveLog || latestEffectiveLog.id !== logId) {
+      return { canRollback: false, reason: '仅允许回退最近一次有效变更记录' };
+    }
+    return { canRollback: true };
+  }
+
+  function rollbackSchedule(logId: string): { success: boolean; reason?: string } {
+    const check = canRollbackLog(logId);
+    if (!check.canRollback) {
+      return { success: false, reason: check.reason };
+    }
+
+    const targetLog = logs.value.find((l) => l.id === logId)!;
+    const schedule = schedules.value.find((s) => s.id === targetLog.scheduleId!)!;
+    const before = targetLog.before!;
+
+    const rollbackUpdates: Partial<BerthSchedule> = {};
+    const rollbackBefore: Record<string, unknown> = {};
+    const rollbackAfter: Record<string, unknown> = {};
+    const changedFields: string[] = [];
+
+    for (const field of ROLLBACK_FIELDS) {
+      if (field in before) {
+        const originalValue = before[field];
+        const currentFieldValue = (schedule as unknown as Record<string, unknown>)[field];
+        if (JSON.stringify(currentFieldValue) !== JSON.stringify(originalValue)) {
+          changedFields.push(field);
+          rollbackBefore[field] = currentFieldValue;
+          rollbackAfter[field] = originalValue;
+          if (field === 'eta' || field === 'etd') {
+            (rollbackUpdates as Record<string, unknown>)[field] = originalValue ? new Date(originalValue as string | number) : originalValue;
+          } else {
+            (rollbackUpdates as Record<string, unknown>)[field] = originalValue;
+          }
+        }
+      }
+    }
+
+    if (changedFields.length === 0) {
+      return { success: false, reason: '无可回退的变更字段' };
+    }
+
+    const currentValues = { ...schedule } as unknown as Record<string, unknown>;
+    Object.assign(schedule, rollbackUpdates);
+
+    const fieldLabels: Record<string, string> = {
+      berthId: '泊位',
+      eta: '预计到港时间',
+      etd: '预计离港时间',
+      status: '状态',
+      operationProgress: '作业进度',
+      operationTeam: '作业班组',
+      remarks: '备注',
+    };
+
+    const changeDesc = changedFields.map((f) => fieldLabels[f] || f).join('、');
+
+    addLog({
+      type: 'rollback',
+      scheduleId: schedule.id,
+      shipId: schedule.shipId,
+      description: `回退调度计划: 恢复${changeDesc}（基于日志 ${logId}）`,
+      before: rollbackBefore,
+      after: rollbackAfter,
+    });
+
+    recordAudit('schedule_write', schedule.id, `回退调度计划: 恢复${changeDesc}`, currentValues, { ...rollbackUpdates } as unknown as Record<string, unknown>);
+
+    return { success: true };
+  }
+
   function scheduleHasConflicts(scheduleId: string): boolean {
     return conflicts.value.some((c) => c.scheduleId === scheduleId);
   }
@@ -667,5 +761,7 @@ export const useScheduleStore = defineStore('schedule', () => {
     batchAddRemarks,
     scheduleHasConflicts,
     getAllOperationTeams,
+    canRollbackLog,
+    rollbackSchedule,
   };
 });

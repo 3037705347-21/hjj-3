@@ -99,6 +99,24 @@ export function useScheduleLogger() {
     );
   }
 
+  function logRollback(
+    scheduleId: string,
+    shipId: string,
+    before: Record<string, unknown>,
+    after: Record<string, unknown>,
+    sourceLogId: string,
+  ) {
+    const changes = Object.keys(after)
+      .filter((k) => JSON.stringify(before[k]) !== JSON.stringify(after[k]))
+      .join(', ');
+    log('rollback', `回退调度计划: ${changes || '恢复字段'}（基于日志 ${sourceLogId}）`, {
+      scheduleId,
+      shipId,
+      before,
+      after,
+    });
+  }
+
   return {
     log,
     logCreate,
@@ -107,6 +125,7 @@ export function useScheduleLogger() {
     logStatusChange,
     logConflict,
     logWarning,
+    logRollback,
     filterLogs,
     getConflictLogs,
   };

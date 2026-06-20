@@ -267,7 +267,7 @@ const auditStats = computed(() => [
               日志类型统计
             </h3>
             <div class="space-y-2">
-              <div v-for="(label, type) in { create: '创建', update: '更新', status_change: '状态变更', conflict: '冲突', warning: '警告' }" :key="type" class="flex items-center justify-between text-xs font-mono">
+              <div v-for="(label, type) in { create: '创建', update: '更新', status_change: '状态变更', rollback: '回退', conflict: '冲突', warning: '警告' }" :key="type" class="flex items-center justify-between text-xs font-mono">
                 <span class="text-console-300">{{ label }}</span>
                 <span class="text-console-100">{{ store.logs.filter(l => l.type === type).length }}</span>
               </div>
