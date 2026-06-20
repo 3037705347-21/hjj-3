@@ -6,7 +6,7 @@ import { useConflictDetection } from '../../composables/useConflictDetection';
 import TimelineShipBlock from './TimelineShipBlock.vue';
 import ScheduleEditDrawer from '../common/ScheduleEditDrawer.vue';
 import { format, addHours, differenceInMinutes } from 'date-fns';
-import { AlertTriangle, Wrench, GripVertical, Plus } from 'lucide-vue-next';
+import { AlertTriangle, Wrench, GripVertical, Plus, X, Clock, Waves, Anchor, CheckCircle, XCircle } from 'lucide-vue-next';
 import type { BerthSchedule } from '../../types';
 
 const store = useScheduleStore();
@@ -48,11 +48,21 @@ function getScheduleDuration(): number {
   return 4;
 }
 
-const { startDrag, onDragOver, onDragLeave, onDrop } = useDragSchedule(
+const {
+  startDrag,
+  onDragOver,
+  onDragLeave,
+  onDrop,
+  previewState,
+  dropFailures,
+  dismissFailure,
+  BUFFER_HOURS,
+} = useDragSchedule(
   getTimeFromX,
   getBerthFromY,
   getScheduleDuration,
   timelineRef,
+  getPixelPerHour,
 );
 
 const timeMarkers = computed(() => {
@@ -126,6 +136,40 @@ const conflictStats = computed(() => {
 });
 
 const conflictsBySchedule = computed(() => conflictStats.value.scheduleConflicts);
+
+function getFailurePosition(failure: { berthId: string; eta: Date; etd: Date }) {
+  const berthIndex = store.sortedBerths.findIndex((b) => b.id === failure.berthId);
+  if (berthIndex === -1) return null;
+
+  const pph = getPixelPerHour();
+  const startMinutes = differenceInMinutes(failure.eta, startTime.value) / 60;
+  const durationMinutes = differenceInMinutes(failure.etd, failure.eta) / 60;
+
+  return {
+    left: berthLabelWidth + startMinutes * pph,
+    width: Math.max(40, durationMinutes * pph),
+    top: headerHeight + berthIndex * rowHeight + 4,
+    height: rowHeight - 8,
+  };
+}
+
+function getSnapPointX(time: Date): number {
+  const pph = getPixelPerHour();
+  const minutes = differenceInMinutes(time, startTime.value) / 60;
+  return berthLabelWidth + minutes * pph;
+}
+
+function getSnapPointY(berthId: string): number {
+  const berthIndex = store.sortedBerths.findIndex((b) => b.id === berthId);
+  return headerHeight + berthIndex * rowHeight + rowHeight / 2;
+}
+
+const snapPointColors: Record<string, string> = {
+  hour: 'bg-harbor-cyan/40',
+  half_hour: 'bg-harbor-cyan/20',
+  high_tide: 'bg-harbor-orange/40',
+  safe_interval: 'bg-harbor-green/40',
+};
 
 function getBlockPosition(scheduleId: string, berthId: string, eta: Date, etd: Date) {
   const berthIndex = store.sortedBerths.findIndex((b) => b.id === berthId);
@@ -350,6 +394,176 @@ onMounted(() => {
           @dragstart="startDrag"
           @click="handleShipClick"
         />
+
+        <template v-if="previewState">
+          <div
+            v-for="point in previewState.snapPoints"
+            :key="`${point.time.getTime()}-${point.type}`"
+            class="absolute w-1 h-1 rounded-full pointer-events-none z-30"
+            :class="snapPointColors[point.type]"
+            :style="{
+              left: `${getSnapPointX(point.time)}px`,
+              top: `${getSnapPointY(previewState.berthId)}px`,
+            }"
+          />
+
+          <div
+            class="absolute rounded pointer-events-none z-40 border-2 border-dashed transition-all duration-100"
+            :class="[
+              previewState.validation.canPlace
+                ? 'border-harbor-green bg-harbor-green/20'
+                : 'border-harbor-red bg-harbor-red/20',
+            ]"
+            :style="{
+              left: `${previewState.x}px`,
+              top: `${previewState.y}px`,
+              width: `${previewState.width}px`,
+              height: `${rowHeight - 8}px`,
+            }"
+          >
+            <div class="h-full flex items-center justify-center gap-2 px-2">
+              <component
+                :is="previewState.validation.canPlace ? CheckCircle : XCircle"
+                class="w-4 h-4 flex-shrink-0"
+                :class="previewState.validation.canPlace ? 'text-harbor-green' : 'text-harbor-red'"
+              />
+              <div class="flex flex-col gap-0.5 min-w-0">
+                <div class="flex items-center gap-1.5 text-[10px] font-mono">
+                  <span
+                    :class="
+                      previewState.validation.canPlace
+                        ? 'text-harbor-green'
+                        : 'text-harbor-red'
+                    "
+                  >
+                    {{ format(previewState.snappedEta, 'MM/dd HH:mm') }}
+                  </span>
+                  <span class="text-console-400">→</span>
+                  <span class="text-console-300">
+                    {{ format(previewState.etd, 'HH:mm') }}
+                  </span>
+                </div>
+                <div class="flex items-center gap-2 text-[9px] font-mono">
+                  <div
+                    class="flex items-center gap-0.5"
+                    :class="
+                      previewState.validation.berthAvailable
+                        ? 'text-harbor-green'
+                        : 'text-harbor-red'
+                    "
+                  >
+                    <Anchor class="w-2.5 h-2.5" />
+                    <span>{{ store.getBerthById(previewState.berthId)?.name || 'Unknown' }}</span>
+                  </div>
+                  <div
+                    class="flex items-center gap-0.5"
+                    :class="
+                      previewState.validation.tideSatisfied
+                        ? 'text-harbor-green'
+                        : 'text-harbor-yellow'
+                    "
+                  >
+                    <Waves class="w-2.5 h-2.5" />
+                    <span>{{ previewState.validation.tideSatisfied ? '潮汐满足' : '潮汐告警' }}</span>
+                  </div>
+                  <div
+                    v-if="previewState.validation.minIntervalBefore > 0"
+                    class="flex items-center gap-0.5"
+                    :class="
+                      previewState.validation.minIntervalBefore >= BUFFER_HOURS * 60
+                        ? 'text-harbor-green'
+                        : 'text-harbor-yellow'
+                    "
+                  >
+                    <Clock class="w-2.5 h-2.5" />
+                    <span>前间隔:{{ Math.round(previewState.validation.minIntervalBefore) }}m</span>
+                  </div>
+                  <div
+                    v-if="previewState.validation.minIntervalAfter > 0"
+                    class="flex items-center gap-0.5"
+                    :class="
+                      previewState.validation.minIntervalAfter >= BUFFER_HOURS * 60
+                        ? 'text-harbor-green'
+                        : 'text-harbor-yellow'
+                    "
+                  >
+                    <Clock class="w-2.5 h-2.5" />
+                    <span>后间隔:{{ Math.round(previewState.validation.minIntervalAfter) }}m</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div
+              v-if="previewState.validation.errors.length > 0 || previewState.validation.warnings.length > 0"
+              class="absolute -top-1 left-1/2 -translate-x-1/2 -translate-y-full mb-1 bg-console-900 border border-console-500 rounded px-2 py-1.5 min-w-[200px] z-50 shadow-xl"
+            >
+              <div
+                v-for="error in previewState.validation.errors"
+                :key="error.id"
+                class="flex items-start gap-1.5 text-[10px] font-mono text-harbor-red mb-1"
+              >
+                <XCircle class="w-3 h-3 flex-shrink-0 mt-0.5" />
+                <span>{{ error.message }}</span>
+              </div>
+              <div
+                v-for="warning in previewState.validation.warnings"
+                :key="warning.id"
+                class="flex items-start gap-1.5 text-[10px] font-mono text-harbor-yellow mb-1"
+              >
+                <AlertTriangle class="w-3 h-3 flex-shrink-0 mt-0.5" />
+                <span>{{ warning.message }}</span>
+              </div>
+            </div>
+          </div>
+        </template>
+
+        <template v-for="failure in dropFailures" :key="failure.id">
+          <div
+            v-if="getFailurePosition(failure)"
+            class="absolute rounded pointer-events-auto z-50 border-2 border-harbor-red bg-harbor-red/30 animate-pulse"
+            :style="{
+              left: `${getFailurePosition(failure)!.left}px`,
+              top: `${getFailurePosition(failure)!.top}px`,
+              width: `${getFailurePosition(failure)!.width}px`,
+              height: `${getFailurePosition(failure)!.height}px`,
+            }"
+          >
+            <div class="h-full flex items-center justify-center gap-2 px-2">
+              <XCircle class="w-4 h-4 text-harbor-red flex-shrink-0" />
+              <div class="flex flex-col gap-0.5 min-w-0 flex-1">
+                <div class="text-[10px] font-mono text-harbor-red font-semibold">
+                  放置失败
+                </div>
+                <div class="text-[9px] font-mono text-harbor-red/80 truncate">
+                  {{ failure.reasons[0] }}
+                </div>
+              </div>
+              <button
+                @click="dismissFailure(failure.id)"
+                class="p-0.5 rounded hover:bg-harbor-red/30 transition-colors"
+              >
+                <X class="w-3 h-3 text-harbor-red" />
+              </button>
+            </div>
+
+            <div
+              class="absolute -top-1 left-1/2 -translate-x-1/2 -translate-y-full mb-1 bg-console-900 border border-harbor-red/50 rounded px-2 py-1.5 min-w-[220px] z-50 shadow-xl"
+            >
+              <div class="text-[10px] font-mono text-harbor-red font-semibold mb-1">
+                无法放置原因:
+              </div>
+              <div
+                v-for="(reason, idx) in failure.reasons"
+                :key="idx"
+                class="flex items-start gap-1.5 text-[10px] font-mono text-harbor-red/90 mb-1"
+              >
+                <span class="text-harbor-red">•</span>
+                <span>{{ reason }}</span>
+              </div>
+            </div>
+          </div>
+        </template>
       </div>
     </div>
 
