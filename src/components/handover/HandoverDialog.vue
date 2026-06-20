@@ -3,7 +3,7 @@ import { ref, computed, watch } from 'vue';
 import { useScheduleStore } from '../../stores/schedule';
 import { useAuthStore } from '../../stores/auth';
 import { mockUsers } from '../../data/mock';
-import type { KeyShipInfo } from '../../types';
+import type { KeyShipInfo, PendingIncidentInfo } from '../../types';
 import {
   X,
   Handshake,
@@ -39,11 +39,13 @@ const incomingOperator = ref('');
 const remarks = ref('');
 const handoverTime = ref(format(new Date(), "yyyy-MM-dd'T'HH:mm", { locale: zhCN }));
 const expandedKeyShips = ref(true);
+const expandedIncidents = ref(true);
 const submitting = ref(false);
 
 const unfinishedPlanCount = computed(() => store.unfinishedPlanCount);
 const currentConflictCount = computed(() => store.totalConflictCount);
 const keyShips = computed<KeyShipInfo[]>(() => store.keyShipsSnapshot);
+const pendingIncidents = computed<PendingIncidentInfo[]>(() => store.pendingIncidentsSnapshot);
 
 const availableOperators = computed(() => {
   return mockUsers
@@ -68,6 +70,7 @@ watch(
       remarks.value = '';
       handoverTime.value = format(new Date(), "yyyy-MM-dd'T'HH:mm", { locale: zhCN });
       expandedKeyShips.value = true;
+      expandedIncidents.value = true;
       submitting.value = false;
     }
   },
@@ -99,6 +102,47 @@ function getPriorityLabel(priority: string): string {
   }
 }
 
+function getSeverityColor(severity: string): string {
+  switch (severity) {
+    case 'critical':
+      return 'text-harbor-red';
+    case 'major':
+      return 'text-harbor-orange';
+    case 'minor':
+      return 'text-harbor-yellow';
+    case 'warning':
+      return 'text-harbor-cyan';
+    default:
+      return 'text-console-400';
+  }
+}
+
+function getSeverityLabel(severity: string): string {
+  switch (severity) {
+    case 'critical':
+      return '特别重大';
+    case 'major':
+      return '重大';
+    case 'minor':
+      return '一般';
+    case 'warning':
+      return '预警';
+    default:
+      return severity;
+  }
+}
+
+function getIncidentStatusLabel(status: string): string {
+  const labels: Record<string, string> = {
+    reported: '已上报',
+    investigating: '调查中',
+    handling: '处置中',
+    resolved: '已解决',
+    closed: '已关闭',
+  };
+  return labels[status] || status;
+}
+
 function getStatusLabel(status: string): string {
   const labels: Record<string, string> = {
     anchored: '锚地待泊',
@@ -124,7 +168,7 @@ function handleSubmit() {
       unfinishedPlanCount: unfinishedPlanCount.value,
       currentConflictCount: currentConflictCount.value,
       keyShips: keyShips.value,
-      pendingIncidents: [],
+      pendingIncidents: pendingIncidents.value,
       remarks: remarks.value.trim(),
       confirmed: false,
     });
@@ -293,6 +337,81 @@ function handleClose() {
                           <p class="text-[10px] font-mono text-console-400 mt-0.5">
                             <span v-if="ship.berthName">{{ ship.berthName }} · </span>
                             {{ getStatusLabel(ship.status) }}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </Transition>
+            </div>
+
+            <div class="panel-border rounded-lg overflow-hidden">
+              <button
+                class="w-full flex items-center justify-between px-4 py-3 hover:bg-console-700/30 transition-colors"
+                @click="expandedIncidents = !expandedIncidents"
+              >
+                <div class="flex items-center gap-2">
+                  <AlertOctagon class="w-4 h-4 text-harbor-red" />
+                  <span class="text-xs font-mono font-semibold text-console-100">
+                    待处理异常 ({{ pendingIncidents.length }})
+                  </span>
+                  <span
+                    v-if="pendingIncidents.length === 0"
+                    class="text-[10px] font-mono text-console-500"
+                  >
+                    暂无待处理异常
+                  </span>
+                </div>
+                <component
+                  :is="expandedIncidents ? ChevronUp : ChevronDown"
+                  class="w-4 h-4 text-console-400"
+                />
+              </button>
+
+              <Transition name="collapse">
+                <div v-if="expandedIncidents && pendingIncidents.length > 0" class="border-t border-console-500/20">
+                  <div class="divide-y divide-console-500/15">
+                    <div
+                      v-for="incident in pendingIncidents"
+                      :key="incident.incidentId"
+                      class="flex items-center justify-between px-4 py-3 hover:bg-console-700/20 transition-colors"
+                    >
+                      <div class="flex items-center gap-3">
+                        <div
+                          :class="[
+                            'w-8 h-8 rounded border flex items-center justify-center',
+                            incident.severity === 'critical' ? 'bg-harbor-red/10 border-harbor-red/30' :
+                            incident.severity === 'major' ? 'bg-harbor-orange/10 border-harbor-orange/30' :
+                            incident.severity === 'minor' ? 'bg-harbor-yellow/10 border-harbor-yellow/30' :
+                            'bg-harbor-cyan/10 border-harbor-cyan/30',
+                          ]"
+                        >
+                          <AlertOctagon
+                            :class="[
+                              'w-4 h-4',
+                              getSeverityColor(incident.severity),
+                            ]"
+                          />
+                        </div>
+                        <div>
+                          <p class="text-xs font-mono font-medium text-console-100 flex items-center gap-1.5">
+                            {{ incident.title }}
+                            <span
+                              :class="[
+                                'text-[9px] font-mono px-1.5 py-0.5 rounded border',
+                                getSeverityColor(incident.severity),
+                                incident.severity === 'critical' ? 'border-harbor-red/30 bg-harbor-red/10' :
+                                incident.severity === 'major' ? 'border-harbor-orange/30 bg-harbor-orange/10' :
+                                incident.severity === 'minor' ? 'border-harbor-yellow/30 bg-harbor-yellow/10' :
+                                'border-harbor-cyan/30 bg-harbor-cyan/10',
+                              ]"
+                            >
+                              {{ getSeverityLabel(incident.severity) }}
+                            </span>
+                          </p>
+                          <p class="text-[10px] font-mono text-console-400 mt-0.5">
+                            状态：{{ getIncidentStatusLabel(incident.status) }}
                           </p>
                         </div>
                       </div>

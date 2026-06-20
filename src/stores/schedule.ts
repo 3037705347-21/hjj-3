@@ -26,6 +26,7 @@ import {
 import { useScheduleLogger } from '../composables/useScheduleLogger';
 import { usePermissionStore } from './permission';
 import { useAuthStore } from './auth';
+import { useIncidentStore } from './incident';
 
 export const useScheduleStore = defineStore('schedule', () => {
   const ships = ref<Ship[]>(mockShips);
@@ -791,7 +792,17 @@ export const useScheduleStore = defineStore('schedule', () => {
   });
 
   const pendingIncidentsSnapshot = computed<PendingIncidentInfo[]>(() => {
-    return [];
+    try {
+      const incidentStore = useIncidentStore();
+      return incidentStore.activeIncidents.map((i) => ({
+        incidentId: i.id,
+        title: i.title,
+        severity: i.severity,
+        status: i.status,
+      }));
+    } catch {
+      return [];
+    }
   });
 
   const latestHandover = computed<HandoverRecord | null>(() => {
@@ -831,10 +842,13 @@ export const useScheduleStore = defineStore('schedule', () => {
     handoverRecords.value.unshift(record);
 
     const keyShipsDesc = record.keyShips.map((k) => `${k.shipName}(${k.priority})`).join('、') || '无';
+    const pendingIncidentsDesc = record.pendingIncidents.length > 0
+      ? record.pendingIncidents.map((p) => `${p.title}[${p.severity}]`).join('、')
+      : '无';
     const handoverDesc =
       `值班交接：${data.outgoingOperator} → ${data.incomingOperator} | ` +
       `未完成计划：${data.unfinishedPlanCount} | 当前冲突：${data.currentConflictCount} | ` +
-      `重点船舶：${keyShipsDesc} | 备注：${data.remarks || '无'}`;
+      `重点船舶：${keyShipsDesc} | 待处理异常：${record.pendingIncidents.length}项(${pendingIncidentsDesc}) | 备注：${data.remarks || '无'}`;
 
     addLog({
       type: 'handover',

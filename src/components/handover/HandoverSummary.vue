@@ -73,6 +73,47 @@ function getStatusLabel(status: string): string {
   return labels[status] || status;
 }
 
+function getSeverityColor(severity: string): string {
+  switch (severity) {
+    case 'critical':
+      return 'text-harbor-red';
+    case 'major':
+      return 'text-harbor-orange';
+    case 'minor':
+      return 'text-harbor-yellow';
+    case 'warning':
+      return 'text-harbor-cyan';
+    default:
+      return 'text-console-400';
+  }
+}
+
+function getSeverityLabel(severity: string): string {
+  switch (severity) {
+    case 'critical':
+      return '特别重大';
+    case 'major':
+      return '重大';
+    case 'minor':
+      return '一般';
+    case 'warning':
+      return '预警';
+    default:
+      return severity;
+  }
+}
+
+function getIncidentStatusLabel(status: string): string {
+  const labels: Record<string, string> = {
+    reported: '已上报',
+    investigating: '调查中',
+    handling: '处置中',
+    resolved: '已解决',
+    closed: '已关闭',
+  };
+  return labels[status] || status;
+}
+
 function formatTime(ts: Date | string | undefined): string {
   if (!ts) return '-';
   return format(new Date(ts), 'yyyy-MM-dd HH:mm:ss', { locale: zhCN });
@@ -210,6 +251,67 @@ function handleClose() {
               <div v-else class="p-6 text-center">
                 <Ship class="w-8 h-8 mx-auto text-console-500 opacity-50 mb-2" />
                 <p class="text-xs font-mono text-console-400">暂无重点船舶记录</p>
+              </div>
+            </div>
+
+            <div class="panel-border rounded-lg overflow-hidden">
+              <div class="px-4 py-3 border-b border-console-500/20 flex items-center gap-2">
+                <AlertOctagon class="w-4 h-4 text-harbor-red" />
+                <span class="text-xs font-mono font-semibold text-console-100">
+                  待处理异常 ({{ displayRecord.pendingIncidents?.length || 0 }})
+                </span>
+              </div>
+              <div v-if="displayRecord.pendingIncidents && displayRecord.pendingIncidents.length > 0" class="max-h-48 overflow-y-auto">
+                <div class="divide-y divide-console-500/15">
+                  <div
+                    v-for="incident in displayRecord.pendingIncidents"
+                    :key="incident.incidentId"
+                    class="flex items-center justify-between px-4 py-2.5 hover:bg-console-700/20 transition-colors"
+                  >
+                    <div class="flex items-center gap-2.5">
+                      <div
+                        :class="[
+                          'w-7 h-7 rounded border flex items-center justify-center',
+                          incident.severity === 'critical' ? 'bg-harbor-red/10 border-harbor-red/30' :
+                          incident.severity === 'major' ? 'bg-harbor-orange/10 border-harbor-orange/30' :
+                          incident.severity === 'minor' ? 'bg-harbor-yellow/10 border-harbor-yellow/30' :
+                          'bg-harbor-cyan/10 border-harbor-cyan/30',
+                        ]"
+                      >
+                        <AlertOctagon
+                          :class="[
+                            'w-3.5 h-3.5',
+                            getSeverityColor(incident.severity),
+                          ]"
+                        />
+                      </div>
+                      <div>
+                        <p class="text-[11px] font-mono font-medium text-console-100 flex items-center gap-1.5">
+                          {{ incident.title }}
+                          <span
+                            :class="[
+                              'text-[8px] font-mono px-1 py-0.5 rounded border',
+                              getSeverityColor(incident.severity),
+                              incident.severity === 'critical' ? 'border-harbor-red/30 bg-harbor-red/10' :
+                              incident.severity === 'major' ? 'border-harbor-orange/30 bg-harbor-orange/10' :
+                              incident.severity === 'minor' ? 'border-harbor-yellow/30 bg-harbor-yellow/10' :
+                              'border-harbor-cyan/30 bg-harbor-cyan/10',
+                            ]"
+                          >
+                            {{ getSeverityLabel(incident.severity) }}
+                          </span>
+                        </p>
+                        <p class="text-[9px] font-mono text-console-400 mt-0.5">
+                          状态：{{ getIncidentStatusLabel(incident.status) }}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div v-else class="p-6 text-center">
+                <AlertOctagon class="w-8 h-8 mx-auto text-console-500 opacity-50 mb-2" />
+                <p class="text-xs font-mono text-console-400">暂无待处理异常记录</p>
               </div>
             </div>
 
