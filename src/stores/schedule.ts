@@ -235,17 +235,28 @@ export const useScheduleStore = defineStore('schedule', () => {
   function updateSchedule(id: string, updates: Partial<BerthSchedule>) {
     const schedule = schedules.value.find((s) => s.id === id);
     if (!schedule) return;
-    const before = { ...schedule };
+    const beforeFull = { ...schedule } as unknown as Record<string, unknown>;
+    const afterFull = { ...updates } as unknown as Record<string, unknown>;
+    const changedBefore: Record<string, unknown> = {};
+    const changedAfter: Record<string, unknown> = {};
+    for (const key of Object.keys(afterFull)) {
+      if (JSON.stringify(beforeFull[key]) !== JSON.stringify(afterFull[key])) {
+        changedBefore[key] = beforeFull[key];
+        changedAfter[key] = afterFull[key];
+      }
+    }
     Object.assign(schedule, updates);
-    addLog({
-      type: 'update',
-      scheduleId: id,
-      shipId: schedule.shipId,
-      description: `更新调度计划 ${id}`,
-      before: before as unknown as Record<string, unknown>,
-      after: { ...updates } as Record<string, unknown>,
-    });
-    recordAudit('schedule_write', id, `更新调度计划 ${id}`, before as unknown as Record<string, unknown>, { ...updates } as Record<string, unknown>);
+    if (Object.keys(changedBefore).length > 0) {
+      addLog({
+        type: 'update',
+        scheduleId: id,
+        shipId: schedule.shipId,
+        description: `更新调度计划 ${id}`,
+        before: changedBefore,
+        after: changedAfter,
+      });
+    }
+    recordAudit('schedule_write', id, `更新调度计划 ${id}`, beforeFull, afterFull);
   }
 
   function checkAndWarnDelay(

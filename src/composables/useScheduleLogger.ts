@@ -36,14 +36,21 @@ export function useScheduleLogger() {
     before: Record<string, unknown>,
     after: Record<string, unknown>,
   ) {
-    const changes = Object.keys(after)
-      .filter((k) => JSON.stringify(before[k]) !== JSON.stringify(after[k]))
-      .join(', ');
+    const changedKeys = Object.keys(after).filter(
+      (k) => JSON.stringify(before[k]) !== JSON.stringify(after[k]),
+    );
+    const changedBefore: Record<string, unknown> = {};
+    const changedAfter: Record<string, unknown> = {};
+    for (const k of changedKeys) {
+      changedBefore[k] = before[k];
+      changedAfter[k] = after[k];
+    }
+    const changes = changedKeys.join(', ');
     log('update', `更新调度计划: ${changes || '字段变更'}`, {
       scheduleId,
       shipId,
-      before,
-      after,
+      before: changedBefore,
+      after: changedAfter,
     });
   }
 
