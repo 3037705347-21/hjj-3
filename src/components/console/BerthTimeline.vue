@@ -44,8 +44,20 @@ function getBerthFromY(y: number): string | null {
   return null;
 }
 
-function getScheduleDuration(): number {
-  return 4;
+function getStartTime(): Date {
+  return startTime.value;
+}
+
+function getBerthLabelWidthFn(): number {
+  return berthLabelWidth;
+}
+
+function getHeaderHeight(): number {
+  return headerHeight;
+}
+
+function getRowHeight(): number {
+  return rowHeight;
 }
 
 const {
@@ -60,9 +72,12 @@ const {
 } = useDragSchedule(
   getTimeFromX,
   getBerthFromY,
-  getScheduleDuration,
+  getStartTime,
+  getBerthLabelWidthFn,
   timelineRef,
   getPixelPerHour,
+  getHeaderHeight,
+  getRowHeight,
 );
 
 const timeMarkers = computed(() => {
@@ -436,7 +451,7 @@ onMounted(() => {
                         : 'text-harbor-red'
                     "
                   >
-                    {{ format(previewState.snappedEta, 'MM/dd HH:mm') }}
+                    {{ format(previewState.eta, 'MM/dd HH:mm') }}
                   </span>
                   <span class="text-console-400">→</span>
                   <span class="text-console-300">

@@ -39,7 +39,6 @@ interface PreviewState {
   berthId: string;
   scheduleId: string;
   validation: ValidationResult;
-  snappedEta: Date;
   snapPoints: SnapPoint[];
 }
 
@@ -59,9 +58,12 @@ const SNAP_THRESHOLD_MINUTES = 15;
 export function useDragSchedule(
   getTimeFromX: (x: number) => Date,
   getBerthFromY: (y: number) => string | null,
-  getDuration: () => number,
+  getStartTime: () => Date,
+  getBerthLabelWidth: () => number,
   timelineRef: { value: HTMLElement | null },
   getPixelPerHour: () => number,
+  getHeaderHeight: () => number,
+  getRowHeight: () => number,
 ) {
   const store = useScheduleStore();
   const { checkTimeOverlap, checkBufferTime, checkDraftLimit, checkLengthLimit, checkCargoMatch, checkTideWindow, checkBerthMaintenance } = useConflictDetection();
@@ -83,7 +85,16 @@ export function useDragSchedule(
     return store.schedules.find((s) => s.id === dragState.value.scheduleId) || null;
   });
 
-  function generateSnapPoints(berthId: string, eta: Date, _durationHours: number): SnapPoint[] {
+  function getActualDurationMs(): number {
+    if (!currentSchedule.value) return 0;
+    return new Date(currentSchedule.value.etd).getTime() - new Date(currentSchedule.value.eta).getTime();
+  }
+
+  function getActualDurationHours(): number {
+    return getActualDurationMs() / 3600000;
+  }
+
+  function generateSnapPoints(berthId: string, eta: Date): SnapPoint[] {
     const points: SnapPoint[] = [];
     const startWindow = addHours(eta, -2);
     const endWindow = addHours(eta, 2);
@@ -270,14 +281,12 @@ export function useDragSchedule(
     const newBerthId = getBerthFromY(y);
 
     if (dragState.value.scheduleId && newBerthId) {
-      const duration = getDuration();
+      const durationMs = getActualDurationMs();
+      const durationHours = getActualDurationHours();
       const pph = getPixelPerHour();
-      const width = duration * pph;
+      const width = durationHours * pph;
 
-      const durationMs = duration * 3600000;
-      const rawEtd = new Date(rawEta.getTime() + durationMs);
-
-      const snapPoints = generateSnapPoints(newBerthId, rawEta, duration);
+      const snapPoints = generateSnapPoints(newBerthId, rawEta);
       const snappedEta = snapToNearestPoint(rawEta, snapPoints);
       const snappedEtd = new Date(snappedEta.getTime() + durationMs);
 
@@ -289,20 +298,21 @@ export function useDragSchedule(
       );
 
       const berthIndex = store.sortedBerths.findIndex((b) => b.id === newBerthId);
-      const headerHeight = 44;
-      const rowHeight = 56;
-      const snappedX = (differenceInMinutes(snappedEta, addHours(new Date(), -6)) / 60) * pph + 180;
+      const headerHeight = getHeaderHeight();
+      const rowHeight = getRowHeight();
+      const startTime = getStartTime();
+      const berthLabelWidth = getBerthLabelWidth();
+      const snappedX = (differenceInMinutes(snappedEta, startTime) / 60) * pph + berthLabelWidth;
 
       previewState.value = {
         x: snappedX,
         y: headerHeight + berthIndex * rowHeight + 4,
         width,
-        eta: rawEta,
-        etd: rawEtd,
+        eta: snappedEta,
+        etd: snappedEtd,
         berthId: newBerthId,
         scheduleId: dragState.value.scheduleId,
         validation,
-        snappedEta,
         snapPoints,
       };
     }
@@ -323,17 +333,16 @@ export function useDragSchedule(
       return;
     }
 
-    const { berthId, snappedEta, validation } = previewState.value;
+    const { berthId, eta: snappedEta, etd: snappedEtd, validation } = previewState.value;
 
     if (!validation.canPlace) {
       const failureId = `failure-${Date.now()}`;
-      const durationMs = new Date(currentSchedule.value.etd).getTime() - new Date(currentSchedule.value.eta).getTime();
       dropFailures.value.push({
         id: failureId,
         scheduleId: dragState.value.scheduleId,
         berthId,
         eta: snappedEta,
-        etd: new Date(snappedEta.getTime() + durationMs),
+        etd: snappedEtd,
         reasons: validation.errors.map((e) => e.message),
         timestamp: Date.now(),
       });
@@ -345,7 +354,7 @@ export function useDragSchedule(
         berthId,
         description: `拖拽放置失败: ${validation.errors.map((e) => e.message).join('; ')}`,
         before: { berthId: currentSchedule.value.berthId, eta: currentSchedule.value.eta, etd: currentSchedule.value.etd },
-        after: { berthId, eta: snappedEta, etd: new Date(snappedEta.getTime() + durationMs) },
+        after: { berthId, eta: snappedEta, etd: snappedEtd },
       });
 
       setTimeout(() => {
@@ -357,16 +366,7 @@ export function useDragSchedule(
     }
 
     const scheduleId = dragState.value.scheduleId;
-    const schedule = store.schedules.find((s) => s.id === scheduleId);
-    if (!schedule) {
-      resetDrag(e);
-      return;
-    }
-
-    const durationMs = new Date(schedule.etd).getTime() - new Date(schedule.eta).getTime();
-    const newEtd = new Date(snappedEta.getTime() + durationMs);
-
-    store.moveSchedule(scheduleId, berthId, snappedEta, newEtd);
+    store.moveSchedule(scheduleId, berthId, snappedEta, snappedEtd);
 
     resetDrag(e);
   }
