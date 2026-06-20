@@ -26,6 +26,7 @@ import {
   XCircle,
   CheckCircle2,
   AlertCircle as AlertCircleIcon,
+  Handshake,
 } from 'lucide-vue-next';
 import { format } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
@@ -68,6 +69,7 @@ const logTypeMeta: Record<LogType, { label: string; icon: typeof Clock; color: s
   conflict: { label: '冲突', icon: AlertTriangle, color: 'text-harbor-red', bgClass: 'bg-harbor-red/15 border-harbor-red/30' },
   warning: { label: '警告', icon: AlertCircle, color: 'text-harbor-yellow', bgClass: 'bg-harbor-yellow/15 border-harbor-yellow/30' },
   rollback: { label: '回退', icon: ResetIcon, color: 'text-harbor-orange', bgClass: 'bg-harbor-orange/15 border-harbor-orange/30' },
+  handover: { label: '交接', icon: Handshake, color: 'text-harbor-blue', bgClass: 'bg-harbor-blue/15 border-harbor-blue/30' },
 };
 
 const allOperators = computed(() => {
@@ -334,6 +336,7 @@ function exportLogs() {
             <option value="conflict">冲突</option>
             <option value="warning">警告</option>
             <option value="rollback">回退</option>
+            <option value="handover">交接记录</option>
           </select>
         </div>
       </div>

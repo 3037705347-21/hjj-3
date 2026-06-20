@@ -11,6 +11,10 @@ import type {
   OperationMilestone,
   MilestoneKey,
   ProgressMode,
+  HandoverRecord,
+  KeyShipInfo,
+  PendingIncidentInfo,
+  ShipPriority,
 } from '../types';
 import {
   mockShips,
@@ -32,6 +36,7 @@ export const useScheduleStore = defineStore('schedule', () => {
   const conflicts = ref<ScheduleConflict[]>([]);
   const selectedScheduleId = ref<string | null>(null);
   const currentOperator = ref('张伟');
+  const handoverRecords = ref<HandoverRecord[]>([]);
   const logger = useScheduleLogger();
 
   function recordAudit(action: 'schedule_write' | 'conflict_resolve' | 'log_export', targetId: string, description: string, before: Record<string, unknown> | null = null, after: Record<string, unknown> | null = null) {
@@ -751,6 +756,104 @@ export const useScheduleStore = defineStore('schedule', () => {
     return Array.from(teams);
   }
 
+  const unfinishedPlanCount = computed(() => {
+    return schedules.value.filter((s) => s.status !== 'departed').length;
+  });
+
+  const totalConflictCount = computed(() => {
+    return conflicts.value.length;
+  });
+
+  const keyShipsSnapshot = computed<KeyShipInfo[]>(() => {
+    const priorityOrder: Record<ShipPriority, number> = {
+      critical: 0,
+      high: 1,
+      normal: 2,
+      low: 3,
+    };
+    return schedules.value
+      .filter((s) => {
+        const ship = ships.value.find((sh) => sh.id === s.shipId);
+        return ship && (ship.priority === 'critical' || ship.priority === 'high');
+      })
+      .map((s) => {
+        const ship = ships.value.find((sh) => sh.id === s.shipId)!;
+        const berth = berths.value.find((b) => b.id === s.berthId);
+        return {
+          shipId: s.shipId,
+          shipName: ship.name,
+          priority: ship.priority,
+          berthName: berth?.name,
+          status: s.status,
+        };
+      })
+      .sort((a, b) => priorityOrder[a.priority] - priorityOrder[b.priority]);
+  });
+
+  const pendingIncidentsSnapshot = computed<PendingIncidentInfo[]>(() => {
+    return [];
+  });
+
+  const latestHandover = computed<HandoverRecord | null>(() => {
+    if (handoverRecords.value.length === 0) return null;
+    return handoverRecords.value[0];
+  });
+
+  const sortedHandoverRecords = computed(() => {
+    return [...handoverRecords.value].sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    );
+  });
+
+  function createHandover(data: Omit<HandoverRecord, 'id' | 'createdAt' | 'keyShips' | 'pendingIncidents'> & {
+    keyShips?: KeyShipInfo[];
+    pendingIncidents?: PendingIncidentInfo[];
+  }): HandoverRecord {
+    const newId = `handover-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    const now = new Date();
+    const record: HandoverRecord = {
+      id: newId,
+      handoverTime: data.handoverTime || now,
+      outgoingOperatorId: data.outgoingOperatorId,
+      outgoingOperator: data.outgoingOperator,
+      incomingOperatorId: data.incomingOperatorId,
+      incomingOperator: data.incomingOperator,
+      unfinishedPlanCount: data.unfinishedPlanCount,
+      currentConflictCount: data.currentConflictCount,
+      keyShips: data.keyShips || [],
+      pendingIncidents: data.pendingIncidents || [],
+      remarks: data.remarks,
+      confirmed: data.confirmed,
+      confirmedAt: data.confirmedAt,
+      confirmedBy: data.confirmedBy,
+      createdAt: now,
+    };
+    handoverRecords.value.unshift(record);
+
+    const keyShipsDesc = record.keyShips.map((k) => `${k.shipName}(${k.priority})`).join('、') || '无';
+    const handoverDesc =
+      `值班交接：${data.outgoingOperator} → ${data.incomingOperator} | ` +
+      `未完成计划：${data.unfinishedPlanCount} | 当前冲突：${data.currentConflictCount} | ` +
+      `重点船舶：${keyShipsDesc} | 备注：${data.remarks || '无'}`;
+
+    addLog({
+      type: 'handover',
+      description: handoverDesc,
+      after: record as unknown as Record<string, unknown>,
+    });
+
+    return record;
+  }
+
+  function confirmHandover(handoverId: string, confirmer: string): boolean {
+    const record = handoverRecords.value.find((h) => h.id === handoverId);
+    if (!record) return false;
+    record.confirmed = true;
+    record.confirmedAt = new Date();
+    record.confirmedBy = confirmer;
+    return true;
+  }
+
   return {
     ships,
     berths,
@@ -760,6 +863,7 @@ export const useScheduleStore = defineStore('schedule', () => {
     conflicts,
     selectedScheduleId,
     currentOperator,
+    handoverRecords,
     DEFAULT_DELAY_THRESHOLD,
     sortedBerths,
     selectedSchedule,
@@ -779,6 +883,12 @@ export const useScheduleStore = defineStore('schedule', () => {
     conflictResolutionRate,
     schedulesByBerth,
     sortedSchedules,
+    unfinishedPlanCount,
+    totalConflictCount,
+    keyShipsSnapshot,
+    pendingIncidentsSnapshot,
+    latestHandover,
+    sortedHandoverRecords,
     setSelectedSchedule,
     updateSchedule,
     updateScheduleStatus,
@@ -803,5 +913,7 @@ export const useScheduleStore = defineStore('schedule', () => {
     getAllOperationTeams,
     canRollbackLog,
     rollbackSchedule,
+    createHandover,
+    confirmHandover,
   };
 });

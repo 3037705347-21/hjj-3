@@ -25,7 +25,11 @@ import {
   CalendarDays,
   CalendarRange,
   Download,
+  Handshake,
+  ChevronDown,
 } from 'lucide-vue-next';
+import HandoverDialog from '../components/handover/HandoverDialog.vue';
+import HandoverSummary from '../components/handover/HandoverSummary.vue';
 import { format } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
 import { computed, onMounted, ref } from 'vue';
@@ -37,6 +41,9 @@ const approvalStore = useApprovalStore();
 const router = useRouter();
 const route = useRoute();
 const currentTime = ref(new Date());
+const showHandoverDialog = ref(false);
+const showHandoverSummary = ref(false);
+const showOperatorMenu = ref(false);
 
 onMounted(() => {
   setInterval(() => {
@@ -208,14 +215,62 @@ const auditStats = computed(() => [
             <Settings class="w-4 h-4" />
           </button>
 
-          <div class="flex items-center gap-2 pl-2 border-l border-console-500/30">
-            <div class="w-8 h-8 rounded-full bg-gradient-to-br from-harbor-orange to-harbor-red flex items-center justify-center">
-              <User class="w-4 h-4 text-white" />
-            </div>
-            <div>
-              <p class="text-xs font-mono font-medium text-console-100">{{ authStore.currentUser?.displayName || store.currentOperator }}</p>
-              <p class="text-[9px] font-mono text-console-400">{{ authStore.currentUser ? USER_ROLE_LABELS[authStore.currentUser.role] : '调度员' }}</p>
-            </div>
+          <div class="flex items-center gap-2 pl-2 border-l border-console-500/30 relative">
+            <button
+              @click="showHandoverDialog = true"
+              class="w-9 h-9 rounded-lg bg-harbor-blue/15 border border-harbor-blue/30 flex items-center justify-center text-harbor-blue hover:bg-harbor-blue/25 transition-all"
+              title="值班交接"
+            >
+              <Handshake class="w-4 h-4" />
+            </button>
+            <button
+              class="flex items-center gap-2 hover:bg-console-700/40 rounded-lg px-2 py-1 transition-colors"
+              @click="showOperatorMenu = !showOperatorMenu"
+            >
+              <div class="w-8 h-8 rounded-full bg-gradient-to-br from-harbor-orange to-harbor-red flex items-center justify-center">
+                <User class="w-4 h-4 text-white" />
+              </div>
+              <div class="text-left">
+                <p class="text-xs font-mono font-medium text-console-100">{{ authStore.currentUser?.displayName || store.currentOperator }}</p>
+                <p class="text-[9px] font-mono text-console-400">{{ authStore.currentUser ? USER_ROLE_LABELS[authStore.currentUser.role] : '调度员' }}</p>
+              </div>
+              <ChevronDown class="w-3 h-3 text-console-400" />
+            </button>
+
+            <Teleport to="body">
+              <Transition name="fade">
+                <div
+                  v-if="showOperatorMenu"
+                  class="fixed z-50"
+                  style="right: 24px; top: 64px;"
+                  @click.self="showOperatorMenu = false"
+                >
+                  <div class="absolute inset-0" @click="showOperatorMenu = false" />
+                  <div class="relative w-56 panel-border rounded-xl shadow-2xl overflow-hidden">
+                    <div class="px-4 py-3 border-b border-console-500/20">
+                      <p class="text-xs font-mono font-semibold text-console-100">{{ authStore.currentUser?.displayName || store.currentOperator }}</p>
+                      <p class="text-[10px] font-mono text-console-400">{{ authStore.currentUser ? USER_ROLE_LABELS[authStore.currentUser.role] : '调度员' }}</p>
+                    </div>
+                    <div class="py-1">
+                      <button
+                        @click="showHandoverSummary = true; showOperatorMenu = false;"
+                        class="w-full flex items-center gap-2 px-4 py-2.5 text-xs font-mono text-console-200 hover:bg-console-700/50 hover:text-console-100 transition-all"
+                      >
+                        <Handshake class="w-3.5 h-3.5 text-harbor-blue" />
+                        最近交接摘要
+                      </button>
+                      <button
+                        @click="showHandoverDialog = true; showOperatorMenu = false;"
+                        class="w-full flex items-center gap-2 px-4 py-2.5 text-xs font-mono text-console-200 hover:bg-console-700/50 hover:text-console-100 transition-all"
+                      >
+                        <Handshake class="w-3.5 h-3.5 text-harbor-cyan" />
+                        发起值班交接
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </Transition>
+            </Teleport>
           </div>
         </div>
       </div>
@@ -294,5 +349,27 @@ const auditStats = computed(() => [
     </main>
 
     <ShipDetailSidebar />
+
+    <HandoverDialog
+      :visible="showHandoverDialog"
+      @close="showHandoverDialog = false"
+    />
+
+    <HandoverSummary
+      :visible="showHandoverSummary"
+      @close="showHandoverSummary = false"
+    />
   </div>
 </template>
+
+<style scoped>
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+  transform: translateY(-8px);
+}
+</style>

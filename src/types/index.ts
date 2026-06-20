@@ -95,7 +95,8 @@ export type LogType =
   | 'status_change'
   | 'conflict'
   | 'warning'
-  | 'rollback';
+  | 'rollback'
+  | 'handover';
 
 export interface ScheduleLog {
   id: string;
@@ -790,3 +791,37 @@ export const REPORT_PERMISSION_MODULE_LABELS: Record<ReportPermissionModule, str
   report_export: '报表导出',
   report_config: '导出配置',
 };
+
+export interface KeyShipInfo {
+  shipId: string;
+  shipName: string;
+  priority: ShipPriority;
+  berthName?: string;
+  status: OperationStatus;
+  remark?: string;
+}
+
+export interface PendingIncidentInfo {
+  incidentId: string;
+  title: string;
+  severity: IncidentSeverity;
+  status: IncidentStatus;
+}
+
+export interface HandoverRecord {
+  id: string;
+  handoverTime: Date;
+  outgoingOperatorId?: string;
+  outgoingOperator: string;
+  incomingOperatorId?: string;
+  incomingOperator: string;
+  unfinishedPlanCount: number;
+  currentConflictCount: number;
+  keyShips: KeyShipInfo[];
+  pendingIncidents: PendingIncidentInfo[];
+  remarks: string;
+  confirmed: boolean;
+  confirmedAt?: Date;
+  confirmedBy?: string;
+  createdAt: Date;
+}
