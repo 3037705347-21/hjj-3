@@ -607,6 +607,30 @@ export const useScheduleStore = defineStore('schedule', () => {
 
   const ROLLBACK_FIELDS = ['berthId', 'eta', 'etd', 'status', 'operationProgress', 'operationTeam', 'remarks'] as const;
 
+  function getLatestRollbackableLog(scheduleId: string): ScheduleLog | null {
+    const scheduleLogs = logs.value.filter(
+      (l) => l.scheduleId === scheduleId && (l.type === 'update' || l.type === 'status_change' || l.type === 'rollback'),
+    );
+
+    let rollbackCredit = 0;
+
+    for (const log of scheduleLogs) {
+      if (log.type === 'rollback') {
+        rollbackCredit++;
+      } else if (log.type === 'update' || log.type === 'status_change') {
+        if (rollbackCredit > 0) {
+          rollbackCredit--;
+        } else {
+          if (log.before && log.after) {
+            return log;
+          }
+        }
+      }
+    }
+
+    return null;
+  }
+
   function canRollbackLog(logId: string): { canRollback: boolean; reason?: string } {
     const targetLog = logs.value.find((l) => l.id === logId);
     if (!targetLog) {
@@ -625,10 +649,8 @@ export const useScheduleStore = defineStore('schedule', () => {
     if (!schedule) {
       return { canRollback: false, reason: '关联的调度计划已不存在' };
     }
-    const latestEffectiveLog = logs.value.find(
-      (l) => l.scheduleId === targetLog.scheduleId && (l.type === 'update' || l.type === 'status_change'),
-    );
-    if (!latestEffectiveLog || latestEffectiveLog.id !== logId) {
+    const latest = getLatestRollbackableLog(targetLog.scheduleId);
+    if (!latest || latest.id !== logId) {
       return { canRollback: false, reason: '仅允许回退最近一次有效变更记录' };
     }
     return { canRollback: true };
