@@ -5,6 +5,7 @@ import type {
   ScheduleConflict,
   TideRecord,
   CargoType,
+  BerthMaintenancePeriod,
 } from '../types';
 
 export function useConflictDetection() {
@@ -13,6 +14,7 @@ export function useConflictDetection() {
     ships: Ship[],
     berths: Berth[],
     tides: TideRecord[],
+    maintenancePeriods: BerthMaintenancePeriod[] = [],
   ): ScheduleConflict[] {
     const conflicts: ScheduleConflict[] = [];
 
@@ -67,6 +69,16 @@ export function useConflictDetection() {
         const nightConflict = checkNightOperation(schedule, ship);
         if (nightConflict) conflicts.push(nightConflict);
       }
+    });
+
+    const activeMaintenance = maintenancePeriods.filter(
+      (m) => m.status === 'planned' || m.status === 'in_progress',
+    );
+    schedules.forEach((schedule) => {
+      const berth = berths.find((b) => b.id === schedule.berthId);
+      if (!berth) return;
+      const mConflict = checkMaintenancePeriodOverlap(schedule, berth, activeMaintenance);
+      if (mConflict) conflicts.push(mConflict);
     });
 
     return conflicts;
@@ -394,6 +406,33 @@ export function useConflictDetection() {
     return conflicts.filter((c) => c.scheduleId === scheduleId);
   }
 
+  function checkMaintenancePeriodOverlap(
+    schedule: BerthSchedule,
+    berth: Berth,
+    maintenancePeriods: BerthMaintenancePeriod[],
+  ): ScheduleConflict | null {
+    const sStart = new Date(schedule.eta).getTime();
+    const sEnd = new Date(schedule.etd).getTime();
+
+    for (const m of maintenancePeriods) {
+      if (m.berthId !== schedule.berthId) continue;
+      const mStart = new Date(m.startTime).getTime();
+      const mEnd = new Date(m.endTime).getTime();
+      if (sStart < mEnd && sEnd > mStart) {
+        const overlapHours = Math.round((Math.min(sEnd, mEnd) - Math.max(sStart, mStart)) / 3600000);
+        return {
+          id: `conflict-maint-period-${schedule.id}-${m.id}`,
+          type: 'berth_maintenance',
+          severity: 'error',
+          scheduleId: schedule.id,
+          message: `泊位维护冲突: ${berth.name}在维护时段内（${new Date(m.startTime).toLocaleString('zh-CN')} ~ ${new Date(m.endTime).toLocaleString('zh-CN')}），重叠${overlapHours}小时`,
+          suggestedAction: `建议更换至其他可用泊位，或调整作业时间避开维护时段`,
+        };
+      }
+    }
+    return null;
+  }
+
   return {
     detectAllConflicts,
     checkTimeOverlap,
@@ -406,6 +445,7 @@ export function useConflictDetection() {
     checkTeamConflict,
     checkDangerousCargoIsolation,
     checkNightOperation,
+    checkMaintenancePeriodOverlap,
     hasConflicts,
   };
 }

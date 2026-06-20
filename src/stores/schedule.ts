@@ -15,18 +15,23 @@ import type {
   KeyShipInfo,
   PendingIncidentInfo,
   ShipPriority,
+  BerthMaintenancePeriod,
+  MaintenanceType,
 } from '../types';
+import { MAINTENANCE_TYPE_LABELS } from '../types';
 import {
   mockShips,
   mockBerths,
   mockSchedules,
   generateTideRecords,
   mockLogs,
+  mockMaintenancePeriods,
 } from '../data/mock';
 import { useScheduleLogger } from '../composables/useScheduleLogger';
 import { usePermissionStore } from './permission';
 import { useAuthStore } from './auth';
 import { useIncidentStore } from './incident';
+import { format } from 'date-fns';
 
 export const useScheduleStore = defineStore('schedule', () => {
   const ships = ref<Ship[]>(mockShips);
@@ -38,6 +43,7 @@ export const useScheduleStore = defineStore('schedule', () => {
   const selectedScheduleId = ref<string | null>(null);
   const currentOperator = ref('张伟');
   const handoverRecords = ref<HandoverRecord[]>([]);
+  const maintenancePeriods = ref<BerthMaintenancePeriod[]>(mockMaintenancePeriods);
   const logger = useScheduleLogger();
 
   function recordAudit(action: 'schedule_write' | 'conflict_resolve' | 'log_export', targetId: string, description: string, before: Record<string, unknown> | null = null, after: Record<string, unknown> | null = null) {
@@ -868,6 +874,137 @@ export const useScheduleStore = defineStore('schedule', () => {
     return true;
   }
 
+  const activeMaintenancePeriods = computed(() =>
+    maintenancePeriods.value.filter(
+      (m) => m.status === 'planned' || m.status === 'in_progress',
+    ),
+  );
+
+  const maintenancePeriodsByBerth = computed(() => {
+    const map: Record<string, BerthMaintenancePeriod[]> = {};
+    activeMaintenancePeriods.value.forEach((m) => {
+      if (!map[m.berthId]) map[m.berthId] = [];
+      map[m.berthId].push(m);
+    });
+    return map;
+  });
+
+  function getMaintenancePeriodsForBerth(berthId: string): BerthMaintenancePeriod[] {
+    return activeMaintenancePeriods.value.filter((m) => m.berthId === berthId);
+  }
+
+  function isScheduleAffectedByMaintenance(scheduleId: string): boolean {
+    const schedule = schedules.value.find((s) => s.id === scheduleId);
+    if (!schedule) return false;
+    const sStart = new Date(schedule.eta).getTime();
+    const sEnd = new Date(schedule.etd).getTime();
+    return activeMaintenancePeriods.value.some((m) => {
+      const mStart = new Date(m.startTime).getTime();
+      const mEnd = new Date(m.endTime).getTime();
+      return m.berthId === schedule.berthId && sStart < mEnd && sEnd > mStart;
+    });
+  }
+
+  function getMaintenanceConflictsForSchedule(scheduleId: string): BerthMaintenancePeriod[] {
+    const schedule = schedules.value.find((s) => s.id === scheduleId);
+    if (!schedule) return [];
+    const sStart = new Date(schedule.eta).getTime();
+    const sEnd = new Date(schedule.etd).getTime();
+    return activeMaintenancePeriods.value.filter((m) => {
+      const mStart = new Date(m.startTime).getTime();
+      const mEnd = new Date(m.endTime).getTime();
+      return m.berthId === schedule.berthId && sStart < mEnd && sEnd > mStart;
+    });
+  }
+
+  function isTimeSlotInMaintenance(
+    berthId: string,
+    startTime: Date,
+    endTime: Date,
+  ): boolean {
+    const sStart = startTime.getTime();
+    const sEnd = endTime.getTime();
+    return activeMaintenancePeriods.value.some((m) => {
+      const mStart = new Date(m.startTime).getTime();
+      const mEnd = new Date(m.endTime).getTime();
+      return m.berthId === berthId && sStart < mEnd && sEnd > mStart;
+    });
+  }
+
+  function addMaintenancePeriod(data: Omit<BerthMaintenancePeriod, 'id' | 'createdAt' | 'updatedAt'>): BerthMaintenancePeriod {
+    const newId = `maint-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    const now = new Date();
+    const period: BerthMaintenancePeriod = {
+      ...data,
+      id: newId,
+      createdAt: now,
+      updatedAt: now,
+    };
+    maintenancePeriods.value.push(period);
+
+    const berth = berths.value.find((b) => b.id === data.berthId);
+    addLog({
+      type: 'warning',
+      berthId: data.berthId,
+      description: `新增泊位维护: ${berth?.name || data.berthId} ${MAINTENANCE_TYPE_LABELS[data.maintenanceType]} (${format(new Date(data.startTime), 'MM-dd HH:mm')} ~ ${format(new Date(data.endTime), 'MM-dd HH:mm')})`,
+      after: { ...period } as unknown as Record<string, unknown>,
+    });
+
+    checkExistingSchedulesForMaintenance(period);
+
+    return period;
+  }
+
+  function updateMaintenancePeriod(id: string, updates: Partial<BerthMaintenancePeriod>) {
+    const period = maintenancePeriods.value.find((m) => m.id === id);
+    if (!period) return;
+    Object.assign(period, updates, { updatedAt: new Date() });
+
+    const berth = berths.value.find((b) => b.id === period.berthId);
+    addLog({
+      type: 'warning',
+      berthId: period.berthId,
+      description: `更新泊位维护: ${berth?.name || period.berthId}`,
+      after: { ...updates } as unknown as Record<string, unknown>,
+    });
+
+    checkExistingSchedulesForMaintenance(period);
+  }
+
+  function deleteMaintenancePeriod(id: string) {
+    const idx = maintenancePeriods.value.findIndex((m) => m.id === id);
+    if (idx === -1) return;
+    const period = maintenancePeriods.value[idx];
+    const berth = berths.value.find((b) => b.id === period.berthId);
+    maintenancePeriods.value.splice(idx, 1);
+    addLog({
+      type: 'warning',
+      berthId: period.berthId,
+      description: `删除泊位维护: ${berth?.name || period.berthId} ${MAINTENANCE_TYPE_LABELS[period.maintenanceType]}`,
+      before: { ...period } as unknown as Record<string, unknown>,
+    });
+  }
+
+  function checkExistingSchedulesForMaintenance(period: BerthMaintenancePeriod) {
+    const mStart = new Date(period.startTime).getTime();
+    const mEnd = new Date(period.endTime).getTime();
+    const berth = berths.value.find((b) => b.id === period.berthId);
+
+    schedules.value.forEach((s) => {
+      if (s.berthId !== period.berthId) return;
+      if (s.status === 'departed') return;
+      const sStart = new Date(s.eta).getTime();
+      const sEnd = new Date(s.etd).getTime();
+      if (sStart < mEnd && sEnd > mStart) {
+        const ship = ships.value.find((sh) => sh.id === s.shipId);
+        logger.logWarning(
+          s.id,
+          `${ship?.name || s.shipId} 与泊位维护冲突: ${berth?.name || period.berthId} ${MAINTENANCE_TYPE_LABELS[period.maintenanceType]} (${format(new Date(period.startTime), 'MM-dd HH:mm')} ~ ${format(new Date(period.endTime), 'MM-dd HH:mm')})`,
+        );
+      }
+    });
+  }
+
   return {
     ships,
     berths,
@@ -929,5 +1066,15 @@ export const useScheduleStore = defineStore('schedule', () => {
     rollbackSchedule,
     createHandover,
     confirmHandover,
+    maintenancePeriods,
+    activeMaintenancePeriods,
+    maintenancePeriodsByBerth,
+    getMaintenancePeriodsForBerth,
+    isScheduleAffectedByMaintenance,
+    getMaintenanceConflictsForSchedule,
+    isTimeSlotInMaintenance,
+    addMaintenancePeriod,
+    updateMaintenancePeriod,
+    deleteMaintenancePeriod,
   };
 });

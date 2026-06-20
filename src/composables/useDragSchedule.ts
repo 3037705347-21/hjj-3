@@ -1,7 +1,7 @@
 import { ref, computed } from 'vue';
 import { useScheduleStore } from '../stores/schedule';
 import { useConflictDetection } from './useConflictDetection';
-import type { BerthSchedule, ScheduleConflict, TideRecord } from '../types';
+import type { BerthSchedule, ScheduleConflict, TideRecord, BerthMaintenancePeriod } from '../types';
 import { differenceInMinutes, startOfHour, addHours } from 'date-fns';
 
 interface DragState {
@@ -66,7 +66,7 @@ export function useDragSchedule(
   getRowHeight: () => number,
 ) {
   const store = useScheduleStore();
-  const { checkTimeOverlap, checkBufferTime, checkDraftLimit, checkLengthLimit, checkCargoMatch, checkTideWindow, checkBerthMaintenance } = useConflictDetection();
+  const { checkTimeOverlap, checkBufferTime, checkDraftLimit, checkLengthLimit, checkCargoMatch, checkTideWindow, checkBerthMaintenance, checkMaintenancePeriodOverlap } = useConflictDetection();
 
   const dragState = ref<DragState>({
     isDragging: false,
@@ -197,6 +197,14 @@ export function useDragSchedule(
         berthAvailable = false;
         if (maintenanceConflict.severity === 'error') errors.push(maintenanceConflict);
         else warnings.push(maintenanceConflict);
+      }
+
+      const activeMaintenance: BerthMaintenancePeriod[] = store.activeMaintenancePeriods;
+      const periodConflict = checkMaintenancePeriodOverlap(tempSchedule, berth, activeMaintenance);
+      if (periodConflict) {
+        berthAvailable = false;
+        if (periodConflict.severity === 'error') errors.push(periodConflict);
+        else warnings.push(periodConflict);
       }
     }
 

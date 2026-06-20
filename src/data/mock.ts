@@ -22,6 +22,7 @@ import type {
   ExternalImportRecord,
   ExternalSyncLog,
   ShipPriority,
+  BerthMaintenancePeriod,
 } from '../types';
 
 const now = new Date();
@@ -471,6 +472,48 @@ export const generateTideRecords = (): TideRecord[] => {
   }
   return records;
 };
+
+export const mockMaintenancePeriods: BerthMaintenancePeriod[] = [
+  {
+    id: 'maint-001',
+    berthId: 'berth-05',
+    startTime: hoursLater(-4),
+    endTime: hoursLater(20),
+    maintenanceType: 'routine',
+    impactScope: 'berth_only',
+    responsiblePerson: '王芳',
+    notes: '5号通用泊位例行维护，岸桥润滑及缆桩检测',
+    status: 'in_progress',
+    createdAt: hoursLater(-24),
+    updatedAt: hoursLater(-4),
+  },
+  {
+    id: 'maint-002',
+    berthId: 'berth-02',
+    startTime: hoursLater(24),
+    endTime: hoursLater(48),
+    maintenanceType: 'equipment_upgrade',
+    impactScope: 'berth_and_adjacent',
+    responsiblePerson: '李明',
+    notes: '2号集装箱泊位岸桥控制系统升级，相邻1号泊位可能受影响',
+    status: 'planned',
+    createdAt: hoursLater(-12),
+    updatedAt: hoursLater(-12),
+  },
+  {
+    id: 'maint-003',
+    berthId: 'berth-04',
+    startTime: hoursLater(36),
+    endTime: hoursLater(52),
+    maintenanceType: 'dredging',
+    impactScope: 'berth_only',
+    responsiblePerson: '张伟',
+    notes: '4号油轮泊位航道疏浚作业，预计16小时完成',
+    status: 'planned',
+    createdAt: hoursLater(-6),
+    updatedAt: hoursLater(-6),
+  },
+];
 
 export const mockLogs: ScheduleLog[] = [
   {

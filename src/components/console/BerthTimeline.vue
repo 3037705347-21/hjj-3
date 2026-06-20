@@ -5,9 +5,11 @@ import { useDragSchedule } from '../../composables/useDragSchedule';
 import { useConflictDetection } from '../../composables/useConflictDetection';
 import TimelineShipBlock from './TimelineShipBlock.vue';
 import ScheduleEditDrawer from '../common/ScheduleEditDrawer.vue';
+import BerthMaintenanceManager from './BerthMaintenanceManager.vue';
 import { format, addHours, differenceInMinutes } from 'date-fns';
-import { AlertTriangle, Wrench, GripVertical, Plus, X, Clock, Waves, Anchor, CheckCircle, XCircle } from 'lucide-vue-next';
+import { AlertTriangle, Wrench, GripVertical, Plus, X, Clock, Waves, Anchor, CheckCircle, XCircle, ShieldAlert } from 'lucide-vue-next';
 import type { BerthSchedule } from '../../types';
+import { MAINTENANCE_TYPE_LABELS } from '../../types';
 
 const store = useScheduleStore();
 const { detectAllConflicts } = useConflictDetection();
@@ -19,6 +21,7 @@ const berthLabelWidth = 180;
 
 const showAddDrawer = ref(false);
 const prefillSchedule = ref<Partial<BerthSchedule> | undefined>(undefined);
+const showMaintenanceManager = ref(false);
 
 const startTime = computed(() => addHours(new Date(), -6));
 const endTime = computed(() => addHours(new Date(), 66));
@@ -101,6 +104,7 @@ const conflictStats = computed(() => {
     store.ships,
     store.berths,
     store.tides,
+    store.activeMaintenancePeriods,
   );
   store.setConflicts(all);
 
@@ -206,6 +210,22 @@ function handleShipClick(scheduleId: string) {
   store.setSelectedSchedule(scheduleId);
 }
 
+function getMaintenanceBlockPosition(berthId: string, maintStart: Date, maintEnd: Date) {
+  const berthIndex = store.sortedBerths.findIndex((b) => b.id === berthId);
+  if (berthIndex === -1) return null;
+
+  const pph = getPixelPerHour();
+  const startMinutes = differenceInMinutes(maintStart, startTime.value) / 60;
+  const durationMinutes = differenceInMinutes(maintEnd, maintStart) / 60;
+
+  return {
+    left: berthLabelWidth + startMinutes * pph,
+    width: Math.max(20, durationMinutes * pph),
+    top: headerHeight + berthIndex * rowHeight + 4,
+    height: rowHeight - 8,
+  };
+}
+
 function handleTimelineDoubleClick(e: MouseEvent) {
   if (!timelineRef.value) return;
   const rect = timelineRef.value.getBoundingClientRect();
@@ -285,6 +305,19 @@ onMounted(() => {
         >
           <Plus class="w-3.5 h-3.5" />
           新增计划
+        </button>
+        <button
+          @click="showMaintenanceManager = true"
+          class="flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-mono text-harbor-orange bg-harbor-orange/15 border border-harbor-orange/30 rounded hover:bg-harbor-orange/25 transition-all"
+        >
+          <Wrench class="w-3.5 h-3.5" />
+          维护排程
+          <span
+            v-if="store.activeMaintenancePeriods.length > 0"
+            class="ml-0.5 min-w-[16px] h-[16px] px-0.5 rounded-full bg-harbor-orange text-console-900 text-[8px] font-mono font-bold flex items-center justify-center"
+          >
+            {{ store.activeMaintenancePeriods.length }}
+          </span>
         </button>
       </div>
     </div>
@@ -390,6 +423,29 @@ onMounted(() => {
       </div>
 
       <div class="absolute top-0 left-0 pointer-events-none" style="margin-left: 0">
+        <div
+          v-for="period in store.activeMaintenancePeriods"
+          :key="`maint-${period.id}`"
+          class="absolute rounded pointer-events-none z-15"
+          :style="{
+            ...getMaintenanceBlockPosition(period.berthId, new Date(period.startTime), new Date(period.endTime)),
+            borderLeft: '3px solid rgba(234, 179, 8, 0.8)',
+          }"
+          v-bind="getMaintenanceBlockPosition(period.berthId, new Date(period.startTime), new Date(period.endTime)) || { left: 0, width: 0, top: 0, height: 0 }"
+        >
+          <div class="h-full bg-harbor-orange/15 border border-harbor-orange/30 border-l-0 rounded-r flex items-center justify-center gap-1 px-1.5 overflow-hidden">
+            <ShieldAlert class="w-3 h-3 text-harbor-orange flex-shrink-0" />
+            <div class="flex flex-col min-w-0">
+              <span class="text-[9px] font-mono text-harbor-orange font-semibold truncate">
+                维护中
+              </span>
+              <span class="text-[8px] font-mono text-harbor-orange/70 truncate">
+                {{ MAINTENANCE_TYPE_LABELS[period.maintenanceType] }}
+              </span>
+            </div>
+          </div>
+        </div>
+
         <TimelineShipBlock
           v-for="schedule in store.schedules"
           :key="schedule.id"
@@ -588,6 +644,11 @@ onMounted(() => {
       :prefill="prefillSchedule"
       @close="showAddDrawer = false"
       @saved="handleSaved"
+    />
+
+    <BerthMaintenanceManager
+      :visible="showMaintenanceManager"
+      @close="showMaintenanceManager = false"
     />
   </div>
 </template>

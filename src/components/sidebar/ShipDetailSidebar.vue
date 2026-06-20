@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useScheduleStore } from '../../stores/schedule';
-import { X, ChevronRight, Pencil, Copy, Trash2, Clock, AlertTriangle, CheckCircle2, Layers, Building2, HardHat, Cpu } from 'lucide-vue-next';
+import { X, ChevronRight, Pencil, Copy, Trash2, Clock, AlertTriangle, CheckCircle2, Layers, Building2, HardHat, Cpu, Wrench } from 'lucide-vue-next';
 import ShipInfoCard from './ShipInfoCard.vue';
 import OperationProgress from './OperationProgress.vue';
 import StatusActions from './StatusActions.vue';
@@ -12,6 +12,8 @@ import type { BerthSchedule, ResourceType } from '../../types';
 import {
   RESOURCE_TYPE_LABELS,
   RESOURCE_STATUS_LABELS,
+  MAINTENANCE_TYPE_LABELS,
+  MAINTENANCE_IMPACT_SCOPE_LABELS,
 } from '../../types';
 import { format, differenceInMinutes } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
@@ -51,6 +53,12 @@ const resourceAllocationCheck = computed(() =>
   store.selectedScheduleId
     ? resourceStore.canTransitionToOperation(store.selectedScheduleId)
     : { allowed: true },
+);
+
+const maintenanceConflicts = computed(() =>
+  store.selectedScheduleId
+    ? store.getMaintenanceConflictsForSchedule(store.selectedScheduleId)
+    : [],
 );
 
 function getResourceTypeIcon(type: ResourceType) {
@@ -231,6 +239,48 @@ function handleSaved(schedule: BerthSchedule) {
           v-if="scheduleConflicts.length > 0"
           :conflicts="scheduleConflicts"
         />
+
+        <div
+          v-if="maintenanceConflicts.length > 0"
+          class="panel-border rounded-lg p-4"
+        >
+          <div class="flex items-center gap-2 mb-3">
+            <Wrench class="w-4 h-4 text-harbor-orange" />
+            <h3 class="font-mono text-sm font-semibold text-console-100">泊位维护影响</h3>
+          </div>
+          <div class="space-y-2">
+            <div
+              v-for="m in maintenanceConflicts"
+              :key="m.id"
+              class="p-2.5 rounded bg-harbor-orange/10 border border-harbor-orange/30"
+            >
+              <div class="flex items-start gap-2">
+                <Wrench class="w-3.5 h-3.5 text-harbor-orange mt-0.5 flex-shrink-0" />
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center gap-2 mb-1">
+                    <span class="text-xs font-mono font-medium text-harbor-orange">
+                      {{ MAINTENANCE_TYPE_LABELS[m.maintenanceType] }}
+                    </span>
+                    <span class="text-[9px] font-mono text-console-400">
+                      {{ MAINTENANCE_IMPACT_SCOPE_LABELS[m.impactScope] }}
+                    </span>
+                  </div>
+                  <div class="text-[10px] font-mono text-console-300">
+                    {{ format(new Date(m.startTime), 'MM-dd HH:mm', { locale: zhCN }) }}
+                    ~
+                    {{ format(new Date(m.endTime), 'MM-dd HH:mm', { locale: zhCN }) }}
+                  </div>
+                  <div class="text-[10px] font-mono text-console-400 mt-0.5">
+                    负责人: {{ m.responsiblePerson }}
+                  </div>
+                  <p v-if="m.notes" class="text-[10px] font-mono text-console-500 mt-1 truncate">
+                    {{ m.notes }}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
 
         <ShipInfoCard :ship="store.selectedShip" />
 

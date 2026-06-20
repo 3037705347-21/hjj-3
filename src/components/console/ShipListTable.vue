@@ -29,6 +29,7 @@ import {
   RefreshCw,
   AlertTriangle,
   ChevronDown,
+  Wrench,
 } from 'lucide-vue-next';
 import type {
   OperationStatus,
@@ -860,11 +861,21 @@ watch(selectedIds, () => {
               <CargoTypeIcon v-if="row.ship" :type="row.ship.cargoType" show-label />
             </td>
             <td class="px-3 py-2">
-              <AlertTriangle
-                v-if="store.scheduleHasConflicts(row.scheduleId)"
-                class="w-4 h-4 text-harbor-red"
-              />
-              <span v-else class="text-console-500 text-[10px]">-</span>
+              <div class="flex items-center gap-1">
+                <AlertTriangle
+                  v-if="store.scheduleHasConflicts(row.scheduleId)"
+                  class="w-4 h-4 text-harbor-red"
+                />
+                <Wrench
+                  v-if="store.isScheduleAffectedByMaintenance(row.scheduleId)"
+                  class="w-4 h-4 text-harbor-orange"
+                  title="受泊位维护影响"
+                />
+                <span
+                  v-if="!store.scheduleHasConflicts(row.scheduleId) && !store.isScheduleAffectedByMaintenance(row.scheduleId)"
+                  class="text-console-500 text-[10px]"
+                >-</span>
+              </div>
             </td>
             <td class="px-3 py-2 text-right">
               <div class="relative inline-block">

@@ -10,9 +10,10 @@ import ShipListTable from '../components/console/ShipListTable.vue';
 import TideIndicator from '../components/console/TideIndicator.vue';
 import ShipDetailSidebar from '../components/sidebar/ShipDetailSidebar.vue';
 import LogPanel from '../components/logs/LogPanel.vue';
-import { Anchor, History, User, RefreshCw, Settings, Bell, Shield, Users, ClipboardCheck, Layers, AlertTriangle, BarChart3, CalendarDays, CalendarRange, TrendingUp, Download, Handshake, ChevronDown } from 'lucide-vue-next';
+import { Anchor, History, User, RefreshCw, Settings, Bell, Shield, Users, ClipboardCheck, Layers, AlertTriangle, BarChart3, CalendarDays, CalendarRange, TrendingUp, Download, Handshake, ChevronDown, Wrench } from 'lucide-vue-next';
 import HandoverDialog from '../components/handover/HandoverDialog.vue';
 import HandoverSummary from '../components/handover/HandoverSummary.vue';
+import BerthMaintenanceManager from '../components/console/BerthMaintenanceManager.vue';
 import { format } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
 import type { ScheduleFilterCriteria, OperationStatus } from '../types';
@@ -46,6 +47,7 @@ const tableFilter = ref<ExternalFilter | undefined>(undefined);
 const showHandoverDialog = ref(false);
 const showHandoverSummary = ref(false);
 const showOperatorMenu = ref(false);
+const showMaintenanceManager = ref(false);
 let filterToken = 0;
 
 onMounted(() => {
@@ -279,6 +281,13 @@ function onStatCardClick(key: StatKey) {
 
           <div class="flex items-center gap-2 pl-2 border-l border-console-500/30 relative">
             <button
+              @click="showMaintenanceManager = true"
+              class="w-9 h-9 rounded-lg bg-harbor-orange/15 border border-harbor-orange/30 flex items-center justify-center text-harbor-orange hover:bg-harbor-orange/25 transition-all"
+              title="泊位维护排程"
+            >
+              <Wrench class="w-4 h-4" />
+            </button>
+            <button
               @click="showHandoverDialog = true"
               class="w-9 h-9 rounded-lg bg-harbor-blue/15 border border-harbor-blue/30 flex items-center justify-center text-harbor-blue hover:bg-harbor-blue/25 transition-all"
               title="值班交接"
@@ -369,6 +378,11 @@ function onStatCardClick(key: StatKey) {
     <HandoverSummary
       :visible="showHandoverSummary"
       @close="showHandoverSummary = false"
+    />
+
+    <BerthMaintenanceManager
+      :visible="showMaintenanceManager"
+      @close="showMaintenanceManager = false"
     />
   </div>
 </template>

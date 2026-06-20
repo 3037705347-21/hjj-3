@@ -825,3 +825,52 @@ export interface HandoverRecord {
   confirmedBy?: string;
   createdAt: Date;
 }
+
+export type MaintenanceType =
+  | 'routine'
+  | 'emergency'
+  | 'equipment_upgrade'
+  | 'dredging'
+  | 'structural_repair'
+  | 'safety_inspection';
+
+export const MAINTENANCE_TYPE_LABELS: Record<MaintenanceType, string> = {
+  routine: '例行维护',
+  emergency: '紧急维修',
+  equipment_upgrade: '设备升级',
+  dredging: '疏浚作业',
+  structural_repair: '结构修复',
+  safety_inspection: '安全检查',
+};
+
+export type MaintenanceImpactScope =
+  | 'berth_only'
+  | 'berth_and_adjacent'
+  | 'full_terminal';
+
+export const MAINTENANCE_IMPACT_SCOPE_LABELS: Record<MaintenanceImpactScope, string> = {
+  berth_only: '仅当前泊位',
+  berth_and_adjacent: '当前泊位及相邻泊位',
+  full_terminal: '全码头',
+};
+
+export interface BerthMaintenancePeriod {
+  id: string;
+  berthId: string;
+  startTime: Date;
+  endTime: Date;
+  maintenanceType: MaintenanceType;
+  impactScope: MaintenanceImpactScope;
+  responsiblePerson: string;
+  notes: string;
+  status: 'planned' | 'in_progress' | 'completed' | 'cancelled';
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export const MAINTENANCE_STATUS_LABELS: Record<BerthMaintenancePeriod['status'], string> = {
+  planned: '计划中',
+  in_progress: '进行中',
+  completed: '已完成',
+  cancelled: '已取消',
+};
