@@ -230,7 +230,7 @@ export const useSiteCheckinStore = defineStore('siteCheckin', () => {
 
   function confirmCompleteWork(id: string, siteRemark?: string) {
     const record = records.value.find((r) => r.id === id);
-    if (!record || record.status !== 'in_progress') return;
+    if (!record || (record.status !== 'in_progress' && record.status !== 'abnormal')) return;
 
     const authStore = useAuthStore();
     const scheduleStore = useScheduleStore();
@@ -250,18 +250,21 @@ export const useSiteCheckinStore = defineStore('siteCheckin', () => {
 
     scheduleStore.updateOperationProgress(record.scheduleId, 100);
 
+    const operationType = schedule.status;
+    scheduleStore.updateScheduleStatus(record.scheduleId, 'departing');
+
     addActionLog(
       id,
       record.scheduleId,
       'complete_work',
-      `${record.teamName}确认完工，作业完成`,
-      { endTime: now, siteRemark },
+      `${record.teamName}确认完工，${operationType === 'loading' ? '装货' : operationType === 'unloading' ? '卸货' : '作业'}完成，计划状态推进至离泊中`,
+      { endTime: now, siteRemark, operationType, scheduleStatusBefore: operationType, scheduleStatusAfter: 'departing' },
     );
 
     recordAudit(
       'schedule_write',
       id,
-      `${record.teamName}确认完工，作业进度更新为100%`,
+      `${record.teamName}确认完工，作业进度更新为100%，计划状态推进至departing`,
     );
   }
 

@@ -294,7 +294,7 @@ const statusOptions: (SiteCheckinStatus | 'all')[] = ['all', 'pending', 'checked
                   异常
                 </button>
                 <button
-                  v-if="record.status === 'in_progress'"
+                  v-if="record.status === 'in_progress' || record.status === 'abnormal'"
                   @click="goToOperation(record.id)"
                   class="px-2 py-1 rounded text-[10px] font-mono bg-harbor-green/20 text-harbor-green border border-harbor-green/30 hover:bg-harbor-green/30 transition-all"
                 >
