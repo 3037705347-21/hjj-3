@@ -10,7 +10,7 @@ import ShipListTable from '../components/console/ShipListTable.vue';
 import TideIndicator from '../components/console/TideIndicator.vue';
 import ShipDetailSidebar from '../components/sidebar/ShipDetailSidebar.vue';
 import LogPanel from '../components/logs/LogPanel.vue';
-import { Anchor, History, User, RefreshCw, Settings, Bell, Shield, Users, ClipboardCheck, Layers, AlertTriangle, BarChart3, CalendarDays, CalendarRange, TrendingUp, Download, Handshake, ChevronDown, Wrench, Clock, Zap, Ship, Hammer, X } from 'lucide-vue-next';
+import { Anchor, History, User, RefreshCw, Settings, Bell, Shield, Users, ClipboardCheck, Layers, AlertTriangle, BarChart3, CalendarDays, CalendarRange, TrendingUp, Download, Handshake, ChevronDown, Wrench, Clock, Zap, Ship, Hammer, X, Camera } from 'lucide-vue-next';
 import HandoverDialog from '../components/handover/HandoverDialog.vue';
 import HandoverSummary from '../components/handover/HandoverSummary.vue';
 import BerthMaintenanceManager from '../components/console/BerthMaintenanceManager.vue';
@@ -376,6 +376,13 @@ function onStatCardClick(key: StatKey) {
             >
               <History class="w-3.5 h-3.5" />
               调度日志
+            </button>
+            <button
+              @click="router.push('/snapshots')"
+              :class="['px-3 py-1.5 rounded text-xs font-mono font-medium transition-all flex items-center gap-1.5', route.path.startsWith('/snapshots') ? 'bg-harbor-cyan/15 text-harbor-cyan border border-harbor-cyan/30 shadow-glow-blue' : 'text-console-300 border border-console-500/30 hover:bg-console-700/50 hover:text-console-100']"
+            >
+              <Camera class="w-3.5 h-3.5" />
+              调度复盘
             </button>
             <button
               @click="router.push('/reports/daily')"

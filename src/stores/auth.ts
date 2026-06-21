@@ -33,7 +33,9 @@ export const useAuthStore = defineStore('auth', () => {
   function canAccessRoute(path: string): boolean {
     if (!currentUser.value) return false;
     if (currentUser.value.role === 'admin') return true;
-    return currentUser.value.accessibleRoutes.includes(path);
+    return currentUser.value.accessibleRoutes.some(
+      (route) => path === route || path.startsWith(route + '/'),
+    );
   }
 
   function getAccessibleRoutes(): string[] {

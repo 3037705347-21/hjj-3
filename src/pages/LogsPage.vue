@@ -27,6 +27,7 @@ import {
   Download,
   Handshake,
   ChevronDown,
+  Camera,
 } from 'lucide-vue-next';
 import HandoverDialog from '../components/handover/HandoverDialog.vue';
 import HandoverSummary from '../components/handover/HandoverSummary.vue';
@@ -117,6 +118,13 @@ const auditStats = computed(() => [
               class="px-3 py-1.5 rounded text-xs font-mono font-medium bg-harbor-cyan/15 text-harbor-cyan border border-harbor-cyan/30 shadow-glow-blue"
             >
               调度日志
+            </button>
+            <button
+              @click="router.push('/snapshots')"
+              class="px-3 py-1.5 rounded text-xs font-mono font-medium text-console-300 border border-console-500/30 hover:bg-console-700/50 hover:text-console-100 transition-all flex items-center gap-1.5"
+            >
+              <Camera class="w-3.5 h-3.5" />
+              调度复盘
             </button>
             <button
               @click="router.push('/reports/daily')"

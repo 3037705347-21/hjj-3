@@ -1,5 +1,12 @@
 export type ShipPriority = 'critical' | 'high' | 'normal' | 'low';
 
+export const SHIP_PRIORITY_LABELS: Record<ShipPriority, string> = {
+  critical: '特急',
+  high: '高',
+  normal: '普通',
+  low: '低',
+};
+
 export type ShipTag =
   | 'key_customer'
   | 'dangerous_operation'
@@ -981,4 +988,95 @@ export type ScenarioPermissionModule = 'scenario_manage' | 'scenario_apply';
 export const SCENARIO_PERMISSION_MODULE_LABELS: Record<ScenarioPermissionModule, string> = {
   scenario_manage: '推演场景管理',
   scenario_apply: '推演结果应用',
+};
+
+export type SnapshotCreateMethod =
+  | 'manual'
+  | 'auto'
+  | 'handover'
+  | 'incident'
+  | 'approval'
+  | 'scenario_apply';
+
+export const SNAPSHOT_CREATE_METHOD_LABELS: Record<SnapshotCreateMethod, string> = {
+  manual: '手动创建',
+  auto: '自动定时',
+  handover: '值班交接',
+  incident: '异常事件',
+  approval: '审批通过',
+  scenario_apply: '推演应用',
+};
+
+export type SnapshotStatus = 'active' | 'archived' | 'deleted';
+
+export const SNAPSHOT_STATUS_LABELS: Record<SnapshotStatus, string> = {
+  active: '正常',
+  archived: '已归档',
+  deleted: '已删除',
+};
+
+export interface SnapshotData {
+  ships: Ship[];
+  berths: Berth[];
+  schedules: BerthSchedule[];
+  tides: TideRecord[];
+  logs: ScheduleLog[];
+  conflicts: ScheduleConflict[];
+  maintenancePeriods: BerthMaintenancePeriod[];
+}
+
+export interface SnapshotSummary {
+  shipsInPort: number;
+  shipsWaiting: number;
+  conflictCount: number;
+  warningCount: number;
+  berthUtilization: number;
+  avgWaitingMinutes: number;
+  totalSchedules: number;
+  totalShips: number;
+  totalBerths: number;
+  keyPlanCount: number;
+}
+
+export interface SnapshotNoteRecord {
+  id: string;
+  snapshotId: string;
+  content: string;
+  author: string;
+  authorId?: string;
+  timestamp: Date;
+  type: 'comment' | 'conclusion' | 'action_item';
+}
+
+export interface Snapshot {
+  id: string;
+  name: string;
+  description?: string;
+  snapshotTime: Date;
+  createMethod: SnapshotCreateMethod;
+  creator: string;
+  creatorId?: string;
+  status: SnapshotStatus;
+  summary: SnapshotSummary;
+  data: SnapshotData;
+  notes: SnapshotNoteRecord[];
+  reviewConclusion?: string;
+  reviewedBy?: string;
+  reviewedAt?: Date;
+  tags?: string[];
+  relatedIncidentId?: string;
+  relatedIncidentTitle?: string;
+  relatedScenarioId?: string;
+  relatedScenarioName?: string;
+  relatedHandoverId?: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export type SnapshotPermissionModule = 'snapshot_view' | 'snapshot_create' | 'snapshot_manage';
+
+export const SNAPSHOT_PERMISSION_MODULE_LABELS: Record<SnapshotPermissionModule, string> = {
+  snapshot_view: '快照查看',
+  snapshot_create: '快照创建',
+  snapshot_manage: '快照管理',
 };

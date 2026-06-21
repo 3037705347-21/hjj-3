@@ -659,7 +659,7 @@ export const mockRoles: Role[] = [
       { module: 'resource_manage', actions: ['read', 'create', 'update', 'delete'] },
       { module: 'resource_allocate', actions: ['read', 'create', 'update', 'delete'] },
     ],
-    accessibleRoutes: ['/', '/logs', '/permission/users', '/permission/roles', '/permission/assign', '/resources', '/resources/board', '/resources/conflicts'],
+    accessibleRoutes: ['/', '/logs', '/permission/users', '/permission/roles', '/permission/assign', '/resources', '/resources/board', '/resources/conflicts', '/snapshots', '/snapshots/compare', '/scenarios'],
     dataScope: 'all',
   },
   {
@@ -676,7 +676,7 @@ export const mockRoles: Role[] = [
       { module: 'resource_manage', actions: ['read', 'update'] },
       { module: 'resource_allocate', actions: ['read', 'create', 'update'] },
     ],
-    accessibleRoutes: ['/', '/logs', '/resources', '/resources/board', '/resources/conflicts'],
+    accessibleRoutes: ['/', '/logs', '/resources', '/resources/board', '/resources/conflicts', '/snapshots', '/snapshots/compare', '/scenarios'],
     dataScope: 'all',
   },
   {
@@ -691,7 +691,7 @@ export const mockRoles: Role[] = [
       { module: 'resource_manage', actions: ['read'] },
       { module: 'resource_allocate', actions: ['read', 'create', 'update'] },
     ],
-    accessibleRoutes: ['/', '/logs', '/resources', '/resources/board'],
+    accessibleRoutes: ['/', '/logs', '/resources', '/resources/board', '/snapshots', '/snapshots/compare', '/scenarios'],
     dataScope: 'berth_group',
   },
   {
@@ -705,7 +705,7 @@ export const mockRoles: Role[] = [
       { module: 'status_change', actions: ['read'] },
       { module: 'resource_manage', actions: ['read'] },
     ],
-    accessibleRoutes: ['/', '/logs', '/resources'],
+    accessibleRoutes: ['/', '/logs', '/resources', '/snapshots', '/scenarios'],
     dataScope: 'self',
   },
 ];

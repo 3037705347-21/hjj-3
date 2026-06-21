@@ -156,6 +156,24 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/pages/scenario/ScenarioDetailPage.vue'),
     meta: { title: '推演详情', requireAuth: true },
   },
+  {
+    path: '/snapshots',
+    name: 'snapshot-list',
+    component: () => import('@/pages/snapshot/SnapshotListPage.vue'),
+    meta: { title: '调度复盘与历史快照', requireAuth: true },
+  },
+  {
+    path: '/snapshots/compare',
+    name: 'snapshot-compare',
+    component: () => import('@/pages/snapshot/SnapshotComparePage.vue'),
+    meta: { title: '盘面对比', requireAuth: true },
+  },
+  {
+    path: '/snapshots/:id',
+    name: 'snapshot-detail',
+    component: () => import('@/pages/snapshot/SnapshotDetailPage.vue'),
+    meta: { title: '快照详情', requireAuth: true },
+  },
 ];
 
 const router = createRouter({
