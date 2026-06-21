@@ -1080,3 +1080,87 @@ export const SNAPSHOT_PERMISSION_MODULE_LABELS: Record<SnapshotPermissionModule,
   snapshot_create: '快照创建',
   snapshot_manage: '快照管理',
 };
+
+export type SiteCheckinStatus = 'pending' | 'checked_in' | 'in_progress' | 'completed' | 'abnormal';
+
+export const SITE_CHECKIN_STATUS_LABELS: Record<SiteCheckinStatus, string> = {
+  pending: '待签到',
+  checked_in: '已签到',
+  in_progress: '作业中',
+  completed: '已完工',
+  abnormal: '异常',
+};
+
+export const SITE_CHECKIN_STATUS_COLORS: Record<SiteCheckinStatus, { bg: string; text: string; border: string }> = {
+  pending: { bg: 'bg-console-500/15', text: 'text-console-300', border: 'border-console-500/30' },
+  checked_in: { bg: 'bg-harbor-blue/15', text: 'text-harbor-blue', border: 'border-harbor-blue/30' },
+  in_progress: { bg: 'bg-harbor-cyan/15', text: 'text-harbor-cyan', border: 'border-harbor-cyan/30' },
+  completed: { bg: 'bg-harbor-green/15', text: 'text-harbor-green', border: 'border-harbor-green/30' },
+  abnormal: { bg: 'bg-harbor-red/15', text: 'text-harbor-red', border: 'border-harbor-red/30' },
+};
+
+export type AbnormalCategory =
+  | 'weather'
+  | 'equipment_failure'
+  | 'tide_window'
+  | 'ship_delay'
+  | 'labor_shortage'
+  | 'cargo_issue'
+  | 'berth_maintenance'
+  | 'other';
+
+export const ABNORMAL_CATEGORY_LABELS: Record<AbnormalCategory, string> = {
+  weather: '天气因素',
+  equipment_failure: '设备故障',
+  tide_window: '潮汐窗口',
+  ship_delay: '船舶延误',
+  labor_shortage: '人力不足',
+  cargo_issue: '货物问题',
+  berth_maintenance: '泊位维护',
+  other: '其他原因',
+};
+
+export interface AbnormalRecord {
+  id: string;
+  category: AbnormalCategory;
+  description: string;
+  reportedBy: string;
+  reportedAt: Date;
+  handled?: boolean;
+  handledBy?: string;
+  handledAt?: Date;
+  handlingNote?: string;
+}
+
+export interface SiteCheckinRecord {
+  id: string;
+  scheduleId: string;
+  teamName: string;
+  checkinTime?: Date;
+  startTime?: Date;
+  endTime?: Date;
+  confirmedBy?: string;
+  status: SiteCheckinStatus;
+  abnormalRecords: AbnormalRecord[];
+  siteRemark?: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface SiteCheckinActionLog {
+  id: string;
+  checkinId: string;
+  scheduleId: string;
+  action: 'checkin' | 'start_work' | 'complete_work' | 'report_abnormal' | 'handle_abnormal' | 'add_remark';
+  operator: string;
+  timestamp: Date;
+  description: string;
+  details?: Record<string, unknown>;
+}
+
+export type SiteOperationPermissionModule = 'site_checkin_manage' | 'site_operation_confirm';
+
+export const SITE_OPERATION_PERMISSION_MODULE_LABELS: Record<SiteOperationPermissionModule, string> = {
+  site_checkin_manage: '现场签到管理',
+  site_operation_confirm: '作业确认管理',
+};

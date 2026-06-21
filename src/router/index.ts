@@ -145,6 +145,24 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '导入记录', requireAuth: true },
   },
   {
+    path: '/site-operation',
+    name: 'site-operation-list',
+    component: () => import('@/pages/siteOperation/SiteCheckinListPage.vue'),
+    meta: { title: '现场作业签到与确认', requireAuth: true },
+  },
+  {
+    path: '/site-operation/confirm/:id',
+    name: 'site-operation-confirm',
+    component: () => import('@/pages/siteOperation/OperationConfirmPage.vue'),
+    meta: { title: '作业确认', requireAuth: true },
+  },
+  {
+    path: '/site-operation/:id',
+    name: 'site-operation-detail',
+    component: () => import('@/pages/siteOperation/SiteOperationDetailPage.vue'),
+    meta: { title: '班组记录详情', requireAuth: true },
+  },
+  {
     path: '/scenarios',
     name: 'scenario-list',
     component: () => import('@/pages/scenario/ScenarioListPage.vue'),
