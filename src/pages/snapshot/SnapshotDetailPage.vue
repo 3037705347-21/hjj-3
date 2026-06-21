@@ -7,6 +7,7 @@ import { useAuthStore } from '../../stores/auth';
 import { USER_ROLE_LABELS, SHIP_PRIORITY_LABELS } from '../../types';
 import { SNAPSHOT_CREATE_METHOD_LABELS, SNAPSHOT_STATUS_LABELS } from '../../types';
 import SnapshotNotesPanel from '../../components/snapshot/SnapshotNotesPanel.vue';
+import SnapshotTimeline from '../../components/snapshot/SnapshotTimeline.vue';
 import {
   Camera,
   ArrowLeft,
@@ -32,6 +33,7 @@ import {
   Shield,
   Users,
   Plus,
+  GanttChartSquare,
 } from 'lucide-vue-next';
 import { format } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
@@ -45,7 +47,7 @@ const authStore = useAuthStore();
 const snapshotId = computed(() => route.params.id as string);
 const currentTime = ref(new Date());
 
-const activeTab = ref<'overview' | 'schedules' | 'conflicts' | 'logs'>('overview');
+const activeTab = ref<'overview' | 'schedules' | 'timeline' | 'conflicts' | 'logs'>('overview');
 const showEditName = ref(false);
 const editName = ref('');
 const showEditDescription = ref(false);
@@ -60,6 +62,7 @@ const keyShips = computed(() => snapshotStore.getKeyShipsFromSnapshot(snapshotId
 const tabs = [
   { key: 'overview', label: '概览', icon: FileText },
   { key: 'schedules', label: '调度计划', icon: Ship },
+  { key: 'timeline', label: '时间轴复盘', icon: GanttChartSquare },
   { key: 'conflicts', label: '冲突告警', icon: AlertTriangle },
   { key: 'logs', label: '操作日志', icon: History },
 ];
@@ -544,6 +547,18 @@ function getPriorityLabel(priority: string) {
                 </tbody>
               </table>
             </div>
+            </div>
+
+            <div v-if="activeTab === 'timeline'">
+              <SnapshotTimeline
+                :snapshot-time="new Date(snapshot.snapshotTime)"
+                :ships="snapshot.data.ships"
+                :berths="snapshot.data.berths"
+                :schedules="snapshot.data.schedules"
+                :tides="snapshot.data.tides"
+                :conflicts="snapshot.data.conflicts"
+                :maintenance-periods="snapshot.data.maintenancePeriods"
+              />
             </div>
 
             <div v-if="activeTab === 'conflicts'" class="bg-console-900/50 rounded-lg border border-console-500/20">
