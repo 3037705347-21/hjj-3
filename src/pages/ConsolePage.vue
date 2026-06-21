@@ -10,7 +10,7 @@ import ShipListTable from '../components/console/ShipListTable.vue';
 import TideIndicator from '../components/console/TideIndicator.vue';
 import ShipDetailSidebar from '../components/sidebar/ShipDetailSidebar.vue';
 import LogPanel from '../components/logs/LogPanel.vue';
-import { Anchor, History, User, RefreshCw, Settings, Bell, Shield, Users, ClipboardCheck, Layers, AlertTriangle, BarChart3, CalendarDays, CalendarRange, TrendingUp, Download, Handshake, ChevronDown, Wrench } from 'lucide-vue-next';
+import { Anchor, History, User, RefreshCw, Settings, Bell, Shield, Users, ClipboardCheck, Layers, AlertTriangle, BarChart3, CalendarDays, CalendarRange, TrendingUp, Download, Handshake, ChevronDown, Wrench, Clock, Zap, Ship, Hammer, X } from 'lucide-vue-next';
 import HandoverDialog from '../components/handover/HandoverDialog.vue';
 import HandoverSummary from '../components/handover/HandoverSummary.vue';
 import BerthMaintenanceManager from '../components/console/BerthMaintenanceManager.vue';
@@ -49,6 +49,203 @@ const showHandoverSummary = ref(false);
 const showOperatorMenu = ref(false);
 const showMaintenanceManager = ref(false);
 let filterToken = 0;
+
+type QuickViewKey =
+  | 'arriving_6h'
+  | 'has_conflict'
+  | 'operating'
+  | 'waiting_departure'
+  | 'maintenance_affected';
+
+interface QuickViewDefinition {
+  key: QuickViewKey;
+  label: string;
+  icon: typeof Clock;
+  colorClass: string;
+  bgClass: string;
+  borderClass: string;
+  activeBgClass: string;
+  activeBorderClass: string;
+}
+
+const QUICK_VIEWS: QuickViewDefinition[] = [
+  {
+    key: 'arriving_6h',
+    label: '6小时内到港',
+    icon: Clock,
+    colorClass: 'text-harbor-blue',
+    bgClass: 'bg-harbor-blue/10',
+    borderClass: 'border-harbor-blue/30',
+    activeBgClass: 'bg-harbor-blue/25',
+    activeBorderClass: 'border-harbor-blue/60',
+  },
+  {
+    key: 'has_conflict',
+    label: '当前有冲突',
+    icon: AlertTriangle,
+    colorClass: 'text-harbor-red',
+    bgClass: 'bg-harbor-red/10',
+    borderClass: 'border-harbor-red/30',
+    activeBgClass: 'bg-harbor-red/25',
+    activeBorderClass: 'border-harbor-red/60',
+  },
+  {
+    key: 'operating',
+    label: '正在作业',
+    icon: Zap,
+    colorClass: 'text-harbor-green',
+    bgClass: 'bg-harbor-green/10',
+    borderClass: 'border-harbor-green/30',
+    activeBgClass: 'bg-harbor-green/25',
+    activeBorderClass: 'border-harbor-green/60',
+  },
+  {
+    key: 'waiting_departure',
+    label: '待离泊',
+    icon: Ship,
+    colorClass: 'text-harbor-cyan',
+    bgClass: 'bg-harbor-cyan/10',
+    borderClass: 'border-harbor-cyan/30',
+    activeBgClass: 'bg-harbor-cyan/25',
+    activeBorderClass: 'border-harbor-cyan/60',
+  },
+  {
+    key: 'maintenance_affected',
+    label: '泊位维护影响中',
+    icon: Hammer,
+    colorClass: 'text-harbor-orange',
+    bgClass: 'bg-harbor-orange/10',
+    borderClass: 'border-harbor-orange/30',
+    activeBgClass: 'bg-harbor-orange/25',
+    activeBorderClass: 'border-harbor-orange/60',
+  },
+];
+
+const activeQuickView = ref<QuickViewKey | null>(null);
+
+const arriving6hCount = computed(() => {
+  const now = Date.now();
+  const in6h = now + 6 * 3600 * 1000;
+  return store.schedules.filter((s) => {
+    if (s.status === 'departed') return false;
+    const eta = new Date(s.eta).getTime();
+    return eta >= now && eta <= in6h;
+  }).length;
+});
+
+const hasConflictCount = computed(() => {
+  const ids = new Set(store.conflicts.map((c) => c.scheduleId));
+  return store.schedules.filter((s) => ids.has(s.id) && s.status !== 'departed').length;
+});
+
+const operatingCount = computed(() => {
+  return store.schedules.filter(
+    (s) => s.status === 'loading' || s.status === 'unloading',
+  ).length;
+});
+
+const waitingDepartureCount = computed(() => {
+  return store.schedules.filter(
+    (s) => s.status === 'berthing' || s.status === 'departing' ||
+           ((s.status === 'loading' || s.status === 'unloading') && s.operationProgress >= 95),
+  ).length;
+});
+
+const maintenanceAffectedCount = computed(() => {
+  return store.schedules.filter(
+    (s) => s.status !== 'departed' && store.isScheduleAffectedByMaintenance(s.id),
+  ).length;
+});
+
+function getQuickViewCount(key: QuickViewKey): number {
+  switch (key) {
+    case 'arriving_6h': return arriving6hCount.value;
+    case 'has_conflict': return hasConflictCount.value;
+    case 'operating': return operatingCount.value;
+    case 'waiting_departure': return waitingDepartureCount.value;
+    case 'maintenance_affected': return maintenanceAffectedCount.value;
+  }
+}
+
+function applyQuickView(key: QuickViewKey) {
+  if (activeQuickView.value === key) {
+    clearQuickView();
+    return;
+  }
+  activeQuickView.value = key;
+  filterToken++;
+
+  const now = Date.now();
+  switch (key) {
+    case 'arriving_6h': {
+      const etaStart = new Date(now).toISOString().slice(0, 16);
+      const etaEnd = new Date(now + 6 * 3600 * 1000).toISOString().slice(0, 16);
+      tableFilter.value = {
+        __token: filterToken,
+        searchQuery: '',
+        statusFilter: 'all',
+        etaStart,
+        etaEnd,
+      };
+      break;
+    }
+    case 'has_conflict': {
+      tableFilter.value = {
+        __token: filterToken,
+        searchQuery: '',
+        statusFilter: 'all',
+        conflictFilter: 'has_conflict',
+      };
+      break;
+    }
+    case 'operating': {
+      const loadingIds = store.schedules
+        .filter((s) => s.status === 'loading' || s.status === 'unloading')
+        .map((s) => s.id);
+      tableFilter.value = {
+        __token: filterToken,
+        searchQuery: '',
+        statusFilter: 'all',
+        scheduleIds: loadingIds,
+      };
+      break;
+    }
+    case 'waiting_departure': {
+      const ids = store.schedules
+        .filter(
+          (s) => s.status === 'berthing' || s.status === 'departing' ||
+                 ((s.status === 'loading' || s.status === 'unloading') && s.operationProgress >= 95),
+        )
+        .map((s) => s.id);
+      tableFilter.value = {
+        __token: filterToken,
+        searchQuery: '',
+        statusFilter: 'all',
+        scheduleIds: ids,
+      };
+      break;
+    }
+    case 'maintenance_affected': {
+      tableFilter.value = {
+        __token: filterToken,
+        searchQuery: '',
+        statusFilter: 'all',
+        maintenanceFilter: 'affected',
+      };
+      break;
+    }
+  }
+}
+
+function clearQuickView() {
+  activeQuickView.value = null;
+  filterToken++;
+  tableFilter.value = {
+    __token: filterToken,
+    searchQuery: '',
+    statusFilter: 'all',
+  };
+}
 
 onMounted(() => {
   setInterval(() => {
@@ -350,9 +547,72 @@ function onStatCardClick(key: StatKey) {
     <main class="p-4 space-y-4">
       <StatsCards @card-click="onStatCardClick" />
 
+      <div class="panel-border rounded-lg p-3 bg-console-800/30">
+        <div class="flex items-center justify-between gap-3 mb-2">
+          <div class="flex items-center gap-2">
+            <Zap class="w-4 h-4 text-harbor-cyan" />
+            <h3 class="font-mono text-xs font-semibold text-console-200 tracking-wide">
+              高频场景快捷视图
+            </h3>
+            <span class="text-[10px] font-mono text-console-500">
+              点击切换，再次点击取消筛选
+            </span>
+          </div>
+          <button
+            v-if="activeQuickView"
+            @click="clearQuickView"
+            class="flex items-center gap-1 px-2 py-1 text-[10px] font-mono text-console-400 border border-console-500/40 rounded hover:text-harbor-cyan hover:border-harbor-cyan/50 transition-all"
+          >
+            <X class="w-3 h-3" />
+            清除筛选
+          </button>
+        </div>
+        <div class="grid grid-cols-5 gap-2">
+          <button
+            v-for="view in QUICK_VIEWS"
+            :key="view.key"
+            @click="applyQuickView(view.key)"
+            :class="[
+              'flex items-center justify-between gap-2 px-3 py-2.5 rounded-lg border transition-all group',
+              activeQuickView === view.key
+                ? `${view.activeBgClass} ${view.activeBorderClass} shadow-lg`
+                : `${view.bgClass} ${view.borderClass} hover:brightness-110`,
+            ]"
+          >
+            <div class="flex items-center gap-2 min-w-0">
+              <component
+                :is="view.icon"
+                :class="[
+                  'w-4 h-4 flex-shrink-0',
+                  activeQuickView === view.key ? view.colorClass : `${view.colorClass}/80 group-hover:${view.colorClass}`,
+                ]"
+              />
+              <span
+                :class="[
+                  'text-xs font-mono font-medium truncate',
+                  activeQuickView === view.key ? view.colorClass : 'text-console-200',
+                ]"
+              >
+                {{ view.label }}
+              </span>
+            </div>
+            <span
+              :class="[
+                'min-w-[22px] h-[22px] px-1.5 rounded-full flex items-center justify-center text-[10px] font-mono font-bold flex-shrink-0',
+                activeQuickView === view.key
+                  ? `${view.colorClass} bg-console-900/50 border ${view.borderClass}`
+                  : `${view.colorClass} bg-console-900/30 border ${view.borderClass}/60`,
+              ]"
+            >
+              {{ getQuickViewCount(view.key) }}
+            </span>
+          </button>
+        </div>
+      </div>
+
       <div class="grid grid-cols-12 gap-4">
         <div class="col-span-8 space-y-4">
-          <BerthTimeline />
+          <BerthTimeline :external-filter="tableFilter" />
           <div class="grid grid-cols-3 gap-4">
             <div class="col-span-2">
               <TideIndicator />

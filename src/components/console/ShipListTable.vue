@@ -71,6 +71,8 @@ const etaStart = ref<string | null>(null);
 const etaEnd = ref<string | null>(null);
 const progressMin = ref<number | null>(null);
 const progressMax = ref<number | null>(null);
+const scheduleIdsFilter = ref<string[] | null>(null);
+const maintenanceFilter = ref<'all' | 'affected' | 'not_affected'>('all');
 
 const selectedIds = ref<Set<string>>(new Set());
 const showBatchMenu = ref(false);
@@ -97,7 +99,9 @@ watch(
     if (criteria.etaEnd !== undefined) etaEnd.value = criteria.etaEnd;
     if (criteria.progressMin !== undefined) progressMin.value = criteria.progressMin;
     if (criteria.progressMax !== undefined) progressMax.value = criteria.progressMax;
-    if (criteria.conflictFilter !== undefined || criteria.statusFilter !== undefined) {
+    if (criteria.scheduleIds !== undefined) scheduleIdsFilter.value = criteria.scheduleIds;
+    if (criteria.maintenanceFilter !== undefined) maintenanceFilter.value = criteria.maintenanceFilter;
+    if (criteria.conflictFilter !== undefined || criteria.statusFilter !== undefined || criteria.maintenanceFilter !== undefined || criteria.scheduleIds !== undefined) {
       showAdvancedFilter.value = true;
     }
   },
@@ -138,6 +142,8 @@ const activeFilterCount = computed(() => {
   if (etaEnd.value) count++;
   if (progressMin.value !== null) count++;
   if (progressMax.value !== null) count++;
+  if (scheduleIdsFilter.value && scheduleIdsFilter.value.length > 0) count++;
+  if (maintenanceFilter.value !== 'all') count++;
   return count;
 });
 
@@ -201,6 +207,17 @@ const filteredSchedules = computed<TableRow[]>(() => {
   }
   if (progressMax.value !== null) {
     result = result.filter((r) => r.schedule.operationProgress <= progressMax.value!);
+  }
+
+  if (scheduleIdsFilter.value && scheduleIdsFilter.value.length > 0) {
+    const idSet = new Set(scheduleIdsFilter.value);
+    result = result.filter((r) => idSet.has(r.scheduleId));
+  }
+
+  if (maintenanceFilter.value === 'affected') {
+    result = result.filter((r) => store.isScheduleAffectedByMaintenance(r.scheduleId));
+  } else if (maintenanceFilter.value === 'not_affected') {
+    result = result.filter((r) => !store.isScheduleAffectedByMaintenance(r.scheduleId));
   }
 
   result = [...result].sort((a, b) => {
@@ -319,6 +336,8 @@ function resetFilters() {
   etaEnd.value = null;
   progressMin.value = null;
   progressMax.value = null;
+  scheduleIdsFilter.value = null;
+  maintenanceFilter.value = 'all';
   selectedIds.value.clear();
 }
 
@@ -377,6 +396,8 @@ function saveView() {
     etaEnd: etaEnd.value,
     progressMin: progressMin.value,
     progressMax: progressMax.value,
+    scheduleIds: scheduleIdsFilter.value,
+    maintenanceFilter: maintenanceFilter.value,
   };
   savedViews.value.push({
     id: `view-${Date.now()}`,
@@ -399,6 +420,8 @@ function applyView(view: SavedView) {
   etaEnd.value = view.criteria.etaEnd;
   progressMin.value = view.criteria.progressMin;
   progressMax.value = view.criteria.progressMax;
+  scheduleIdsFilter.value = view.criteria.scheduleIds ?? null;
+  maintenanceFilter.value = view.criteria.maintenanceFilter ?? 'all';
   showViewList.value = false;
 }
 

@@ -8,8 +8,16 @@ import ScheduleEditDrawer from '../common/ScheduleEditDrawer.vue';
 import BerthMaintenanceManager from './BerthMaintenanceManager.vue';
 import { format, addHours, differenceInMinutes } from 'date-fns';
 import { AlertTriangle, Wrench, GripVertical, Plus, X, Clock, Waves, Anchor, CheckCircle, XCircle, ShieldAlert, ChevronDown, ChevronUp, AlertCircle } from 'lucide-vue-next';
-import type { BerthSchedule, ScheduleConflict } from '../../types';
+import type { BerthSchedule, ScheduleConflict, ScheduleFilterCriteria } from '../../types';
 import { MAINTENANCE_TYPE_LABELS, SHIP_TAG_LABELS } from '../../types';
+
+interface ExternalFilter extends Partial<ScheduleFilterCriteria> {
+  __token?: number;
+}
+
+const props = defineProps<{
+  externalFilter?: ExternalFilter;
+}>();
 
 const store = useScheduleStore();
 const { detectAllConflicts } = useConflictDetection();
@@ -215,6 +223,65 @@ const groupedConflicts = computed(() => {
   });
   byShip.sort((a, b) => b.errors.length - a.errors.length || b.warnings.length - a.warnings.length);
   return byShip;
+});
+
+const highlightedScheduleIds = computed<Set<string> | null>(() => {
+  const f = props.externalFilter;
+  if (!f) return null;
+  const hasAnyFilter =
+    (f.searchQuery !== undefined && f.searchQuery !== '') ||
+    (f.statusFilter !== undefined && f.statusFilter !== 'all') ||
+    (f.priorityFilter !== undefined && f.priorityFilter !== 'all') ||
+    (f.cargoTypeFilter !== undefined && f.cargoTypeFilter !== 'all') ||
+    (f.berthFilter !== undefined && f.berthFilter !== 'all') ||
+    (f.conflictFilter !== undefined && f.conflictFilter !== 'all') ||
+    (f.teamFilter !== undefined && f.teamFilter !== 'all') ||
+    (f.etaStart !== undefined && f.etaStart !== null) ||
+    (f.etaEnd !== undefined && f.etaEnd !== null) ||
+    (f.progressMin !== undefined && f.progressMin !== null) ||
+    (f.progressMax !== undefined && f.progressMax !== null) ||
+    (f.scheduleIds !== undefined && f.scheduleIds !== null && f.scheduleIds.length > 0) ||
+    (f.maintenanceFilter !== undefined && f.maintenanceFilter !== 'all');
+  if (!hasAnyFilter) return null;
+
+  const ids = new Set<string>();
+  store.schedules.forEach((s) => {
+    const ship = store.getShipById(s.shipId);
+    const berth = store.getBerthById(s.berthId);
+    if (!ship || !berth) return;
+
+    if (f.searchQuery) {
+      const q = f.searchQuery.toLowerCase();
+      if (
+        !ship.name.toLowerCase().includes(q) &&
+        !ship.imo.toLowerCase().includes(q) &&
+        !berth.name.toLowerCase().includes(q)
+      ) return;
+    }
+    if (f.statusFilter && f.statusFilter !== 'all' && s.status !== f.statusFilter) return;
+    if (f.priorityFilter && f.priorityFilter !== 'all' && ship.priority !== f.priorityFilter) return;
+    if (f.cargoTypeFilter && f.cargoTypeFilter !== 'all' && ship.cargoType !== f.cargoTypeFilter) return;
+    if (f.berthFilter && f.berthFilter !== 'all' && s.berthId !== f.berthFilter) return;
+    if (f.conflictFilter && f.conflictFilter === 'has_conflict' && !store.scheduleHasConflicts(s.id)) return;
+    if (f.conflictFilter && f.conflictFilter === 'no_conflict' && store.scheduleHasConflicts(s.id)) return;
+    if (f.teamFilter && f.teamFilter !== 'all' && s.operationTeam !== f.teamFilter) return;
+    if (f.etaStart) {
+      const start = new Date(f.etaStart).getTime();
+      if (new Date(s.eta).getTime() < start) return;
+    }
+    if (f.etaEnd) {
+      const end = new Date(f.etaEnd).getTime();
+      if (new Date(s.eta).getTime() > end) return;
+    }
+    if (f.progressMin !== null && f.progressMin !== undefined && s.operationProgress < f.progressMin) return;
+    if (f.progressMax !== null && f.progressMax !== undefined && s.operationProgress > f.progressMax) return;
+    if (f.scheduleIds && f.scheduleIds.length > 0 && !f.scheduleIds.includes(s.id)) return;
+    if (f.maintenanceFilter && f.maintenanceFilter === 'affected' && !store.isScheduleAffectedByMaintenance(s.id)) return;
+    if (f.maintenanceFilter && f.maintenanceFilter === 'not_affected' && store.isScheduleAffectedByMaintenance(s.id)) return;
+
+    ids.add(s.id);
+  });
+  return ids;
 });
 
 function getFailurePosition(failure: { berthId: string; eta: Date; etd: Date }) {
@@ -675,7 +742,14 @@ onMounted(() => {
           :has-conflict="!!conflictsBySchedule[schedule.id]"
           :error-count="conflictStats.errorCounts[schedule.id] || 0"
           :warning-count="conflictStats.warningCounts[schedule.id] || 0"
-          class="pointer-events-auto"
+          class="pointer-events-auto transition-all duration-200"
+          :class="[
+            highlightedScheduleIds && !highlightedScheduleIds.has(schedule.id)
+              ? 'opacity-20 saturate-50 grayscale-[30%]'
+              : highlightedScheduleIds && highlightedScheduleIds.has(schedule.id)
+              ? 'ring-2 ring-harbor-cyan/60 ring-offset-1 ring-offset-console-800 rounded shadow-glow-cyan z-10'
+              : '',
+          ]"
           @dragstart="startDrag"
           @click="handleShipClick"
         />

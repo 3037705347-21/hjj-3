@@ -190,6 +190,8 @@ export interface ScheduleFilterCriteria {
   etaEnd: string | null;
   progressMin: number | null;
   progressMax: number | null;
+  scheduleIds?: string[] | null;
+  maintenanceFilter?: 'all' | 'affected' | 'not_affected';
 }
 
 export interface SavedView {
