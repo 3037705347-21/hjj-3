@@ -127,7 +127,18 @@ export const useSiteCheckinStore = defineStore('siteCheckin', () => {
     return actionLogs.value.filter((l) => l.scheduleId === scheduleId);
   }
 
-  function createCheckinRecord(scheduleId: string, teamName: string): SiteCheckinRecord {
+  function getTeamNameForRecord(record: SiteCheckinRecord): string {
+    const scheduleStore = useScheduleStore();
+    const schedule = scheduleStore.schedules.find((s) => s.id === record.scheduleId);
+    return schedule?.operationTeam || record.teamName || '未分配班组';
+  }
+
+  function createCheckinRecord(scheduleId: string): SiteCheckinRecord | null {
+    const scheduleStore = useScheduleStore();
+    const schedule = scheduleStore.schedules.find((s) => s.id === scheduleId);
+    if (!schedule) return null;
+
+    const teamName = schedule.operationTeam || '未分配班组';
     const now = new Date();
     const newRecord: SiteCheckinRecord = {
       id: `checkin-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
@@ -175,19 +186,21 @@ export const useSiteCheckinStore = defineStore('siteCheckin', () => {
     if (!record || record.status !== 'pending') return;
 
     const now = new Date();
+    const teamName = getTeamNameForRecord(record);
     record.checkinTime = now;
     record.status = 'checked_in';
+    record.teamName = teamName;
     record.updatedAt = now;
 
     addActionLog(
       id,
       record.scheduleId,
       'checkin',
-      `${record.teamName}完成签到`,
+      `${teamName}完成签到`,
       { checkinTime: now },
     );
 
-    recordAudit('schedule_write', id, `${record.teamName}完成现场签到`);
+    recordAudit('schedule_write', id, `${teamName}完成现场签到`);
   }
 
   function confirmStartWork(id: string) {
@@ -200,10 +213,12 @@ export const useSiteCheckinStore = defineStore('siteCheckin', () => {
 
     if (!schedule) return;
 
+    const teamName = getTeamNameForRecord(record);
     const now = new Date();
     record.startTime = now;
     record.status = 'in_progress';
     record.confirmedBy = authStore.currentUser?.displayName || currentOperator.value;
+    record.teamName = teamName;
     record.updatedAt = now;
 
     const operationType = schedule.status === 'loading' || schedule.status === 'unloading'
@@ -217,14 +232,14 @@ export const useSiteCheckinStore = defineStore('siteCheckin', () => {
       id,
       record.scheduleId,
       'start_work',
-      `${record.teamName}确认开工，开始${operationType === 'loading' ? '装货' : '卸货'}作业`,
+      `${teamName}确认开工，开始${operationType === 'loading' ? '装货' : '卸货'}作业`,
       { startTime: now, operationType },
     );
 
     recordAudit(
       'schedule_write',
       id,
-      `${record.teamName}确认开工，计划状态变更为${operationType === 'loading' ? '装货' : '卸货'}`,
+      `${teamName}确认开工，计划状态变更为${operationType === 'loading' ? '装货' : '卸货'}`,
     );
   }
 
@@ -238,10 +253,12 @@ export const useSiteCheckinStore = defineStore('siteCheckin', () => {
 
     if (!schedule) return;
 
+    const teamName = getTeamNameForRecord(record);
     const now = new Date();
     record.endTime = now;
     record.status = 'completed';
     record.confirmedBy = authStore.currentUser?.displayName || currentOperator.value;
+    record.teamName = teamName;
     record.updatedAt = now;
 
     if (siteRemark) {
@@ -257,14 +274,14 @@ export const useSiteCheckinStore = defineStore('siteCheckin', () => {
       id,
       record.scheduleId,
       'complete_work',
-      `${record.teamName}确认完工，${operationType === 'loading' ? '装货' : operationType === 'unloading' ? '卸货' : '作业'}完成，计划状态推进至离泊中`,
+      `${teamName}确认完工，${operationType === 'loading' ? '装货' : operationType === 'unloading' ? '卸货' : '作业'}完成，计划状态推进至离泊中`,
       { endTime: now, siteRemark, operationType, scheduleStatusBefore: operationType, scheduleStatusAfter: 'departing' },
     );
 
     recordAudit(
       'schedule_write',
       id,
-      `${record.teamName}确认完工，作业进度更新为100%，计划状态推进至departing`,
+      `${teamName}确认完工，作业进度更新为100%，计划状态推进至departing`,
     );
   }
 
@@ -382,6 +399,29 @@ export const useSiteCheckinStore = defineStore('siteCheckin', () => {
     return abnormals;
   }
 
+  function syncTeamNameFromSchedule(scheduleId: string) {
+    const scheduleStore = useScheduleStore();
+    const schedule = scheduleStore.schedules.find((s) => s.id === scheduleId);
+    if (!schedule || !schedule.operationTeam) return;
+
+    const affectedRecords = records.value.filter((r) => r.scheduleId === scheduleId);
+    affectedRecords.forEach((record) => {
+      if (record.teamName !== schedule.operationTeam) {
+        const beforeTeam = record.teamName;
+        record.teamName = schedule.operationTeam!;
+        record.updatedAt = new Date();
+
+        addActionLog(
+          record.id,
+          scheduleId,
+          'add_remark',
+          `班组同步更新: ${beforeTeam || '未分配'} → ${schedule.operationTeam}`,
+          { beforeTeam, afterTeam: schedule.operationTeam },
+        );
+      }
+    });
+  }
+
   return {
     records,
     actionLogs,
@@ -394,6 +434,7 @@ export const useSiteCheckinStore = defineStore('siteCheckin', () => {
     completedRecords,
     abnormalRecords,
     statsCards,
+    getTeamNameForRecord,
     getRecordsByScheduleId,
     getLogsByCheckinId,
     getLogsByScheduleId,
@@ -405,6 +446,7 @@ export const useSiteCheckinStore = defineStore('siteCheckin', () => {
     reportAbnormal,
     handleAbnormal,
     updateSiteRemark,
+    syncTeamNameFromSchedule,
     getUnresolvedAbnormals,
   };
 });

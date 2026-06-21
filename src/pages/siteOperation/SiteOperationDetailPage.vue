@@ -372,7 +372,7 @@ function goToConfirm() {
                   <UsersIcon class="w-3.5 h-3.5 text-harbor-cyan mt-0.5" />
                   <div>
                     <p class="text-[9px] font-mono text-console-400 uppercase tracking-wider">作业班组</p>
-                    <p class="text-xs font-mono font-medium text-console-100">{{ checkinRecord.teamName }}</p>
+                    <p class="text-xs font-mono font-medium text-console-100">{{ siteCheckinStore.getTeamNameForRecord(checkinRecord) }}</p>
                   </div>
                 </div>
                 <div class="flex items-start gap-2">

@@ -47,8 +47,9 @@ const filteredRecords = computed(() => {
       const berth = scheduleStore.getBerthById(
         scheduleStore.schedules.find((s) => s.id === r.scheduleId)?.berthId || '',
       );
+      const teamName = siteCheckinStore.getTeamNameForRecord(r);
       return (
-        r.teamName.toLowerCase().includes(query) ||
+        teamName.toLowerCase().includes(query) ||
         ship?.name.toLowerCase().includes(query) ||
         berth?.name.toLowerCase().includes(query)
       );
@@ -201,7 +202,7 @@ const statusOptions: (SiteCheckinStatus | 'all')[] = ['all', 'pending', 'checked
             <td class="px-4 py-3">
               <div class="flex items-center gap-2">
                 <Users class="w-3.5 h-3.5 text-harbor-cyan" />
-                <span class="text-xs font-mono text-console-100">{{ record.teamName }}</span>
+                <span class="text-xs font-mono text-console-100">{{ siteCheckinStore.getTeamNameForRecord(record) }}</span>
               </div>
             </td>
             <td class="px-4 py-3">

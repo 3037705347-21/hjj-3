@@ -38,6 +38,7 @@ import { useScheduleLogger } from '../composables/useScheduleLogger';
 import { usePermissionStore } from './permission';
 import { useAuthStore } from './auth';
 import { useIncidentStore } from './incident';
+import { useSiteCheckinStore } from './siteCheckin';
 import { format } from 'date-fns';
 
 export const useScheduleStore = defineStore('schedule', () => {
@@ -618,6 +619,14 @@ export const useScheduleStore = defineStore('schedule', () => {
         after: { operationTeam: team },
       });
     });
+
+    try {
+      const siteCheckinStore = useSiteCheckinStore();
+      ids.forEach((id) => {
+        siteCheckinStore.syncTeamNameFromSchedule(id);
+      });
+    } catch {
+    }
   }
 
   function batchAddRemarks(ids: string[], remarks: string, append = true) {
