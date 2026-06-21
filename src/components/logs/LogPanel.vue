@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { useScheduleStore } from '../../stores/schedule';
 import { useScheduleLogger } from '../../composables/useScheduleLogger';
-import type { LogType, ScheduleLog } from '../../types';
-import { computed, ref } from 'vue';
+import { useSnapshotStore } from '../../stores/snapshot';
+import type { LogType, ScheduleLog, SnapshotCreateMethod } from '../../types';
+import { computed, nextTick, ref } from 'vue';
 import {
   Clock,
   PlusCircle,
@@ -27,10 +28,16 @@ import {
   CheckCircle2,
   AlertCircle as AlertCircleIcon,
   Handshake,
+  Camera,
+  Search as SearchIcon,
+  CheckCircle,
+  Info,
+  X,
 } from 'lucide-vue-next';
 import { format } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
 import LogDetailModal from './LogDetailModal.vue';
+import { useRouter } from 'vue-router';
 
 const props = withDefaults(
   defineProps<{
@@ -45,6 +52,8 @@ const props = withDefaults(
 
 const store = useScheduleStore();
 useScheduleLogger();
+const snapshotStore = useSnapshotStore();
+const router = useRouter();
 
 const typeFilter = ref<LogType | 'all'>('all');
 const searchQuery = ref('');
@@ -261,6 +270,85 @@ function exportLogs() {
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
 }
+
+const snapshotToast = ref<{
+  show: boolean;
+  type: 'success' | 'info' | 'warning';
+  title: string;
+  message: string;
+  action?: { label: string; onClick: () => void };
+} | null>(null);
+
+let toastTimer: ReturnType<typeof setTimeout> | null = null;
+function showToast(toast: Exclude<typeof snapshotToast.value, null>) {
+  if (toastTimer) clearTimeout(toastTimer);
+  snapshotToast.value = toast;
+  toastTimer = setTimeout(() => {
+    snapshotToast.value = null;
+  }, 5000);
+}
+
+function findSnapshotForLog(log: ScheduleLog) {
+  snapshotStore.ensureInitialized();
+  const logTime = new Date(log.timestamp);
+  const snapshot = snapshotStore.findSnapshotNearestToTime(logTime, { withinMinutes: 60 });
+  if (snapshot) {
+    const diffMin = Math.round(
+      Math.abs(new Date(snapshot.snapshotTime).getTime() - logTime.getTime()) / 60000,
+    );
+    showToast({
+      show: true,
+      type: 'success',
+      title: `找到当时快照（${diffMin >= 0 ? diffMin + ' 分钟差' : '时间附近'}）`,
+      message: `${snapshot.name}`,
+      action: {
+        label: '打开快照复盘',
+        onClick: () => router.push(`/snapshots/${snapshot.id}`),
+      },
+    });
+  } else {
+    showToast({
+      show: true,
+      type: 'warning',
+      title: '未找到当时快照',
+      message: `日志时间（${format(logTime, 'MM-dd HH:mm', { locale: zhCN })}）前后 60 分钟内无快照`,
+      action: {
+        label: '从日志创建复盘快照',
+        onClick: () => createSnapshotFromLog(log),
+      },
+    });
+  }
+}
+
+function createSnapshotFromLog(log: ScheduleLog) {
+  snapshotStore.ensureInitialized();
+  const methodMap: Partial<Record<LogType, SnapshotCreateMethod>> = {
+    conflict: 'incident',
+    warning: 'incident',
+    handover: 'handover',
+    rollback: 'manual',
+  };
+  const created = snapshotStore.createQuickSnapshot(
+    methodMap[log.type] || 'manual',
+    {
+      name: `日志复盘快照·${logTypeMeta[log.type]?.label || log.type}·${format(new Date(log.timestamp), 'HH:mm', { locale: zhCN })}`,
+      description: `基于日志【${log.description}】创建的复盘快照`,
+      tags: ['日志复盘', logTypeMeta[log.type]?.label || log.type],
+    },
+  );
+  if (created) {
+    showToast({
+      show: true,
+      type: 'success',
+      title: '复盘快照已创建',
+      message: `${created.name}`,
+      action: {
+        label: '进入复盘',
+        onClick: () => router.push(`/snapshots/${created.id}`),
+      },
+    });
+  }
+}
 </script>
 
 <template>
@@ -469,6 +557,22 @@ function exportLogs() {
         </div>
         <div class="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-all shrink-0">
           <button
+            @click.stop="findSnapshotForLog(log)"
+            class="flex items-center gap-1 px-2 py-1 text-[10px] font-mono text-harbor-cyan border border-harbor-cyan/30 rounded hover:bg-harbor-cyan/10 transition-all"
+            title="查找该时间点附近的快照"
+          >
+            <SearchIcon class="w-3 h-3" />
+            快照
+          </button>
+          <button
+            @click.stop="createSnapshotFromLog(log)"
+            class="flex items-center gap-1 px-2 py-1 text-[10px] font-mono text-harbor-green border border-harbor-green/30 rounded hover:bg-harbor-green/10 transition-all"
+            title="基于该日志创建复盘快照"
+          >
+            <Camera class="w-3 h-3" />
+            存证
+          </button>
+          <button
             v-if="log.before || log.after"
             @click.stop="openLogDetail(log)"
             class="flex items-center gap-1 px-2 py-1 text-[10px] font-mono text-console-400 border border-console-500/40 rounded hover:text-harbor-cyan hover:border-harbor-cyan/50 transition-all"
@@ -559,6 +663,68 @@ function exportLogs() {
               确认回退
             </button>
           </div>
+        </div>
+      </div>
+    </Transition>
+  </Teleport>
+
+  <Teleport to="body">
+    <Transition name="modal">
+      <div
+        v-if="snapshotToast && snapshotToast.show"
+        class="fixed bottom-6 right-6 z-[200] panel-border rounded-xl shadow-2xl backdrop-blur-xl bg-console-800/98 p-4 min-w-[340px] max-w-[420px]"
+      >
+        <div class="flex items-start gap-3">
+          <div
+            :class="[
+              'w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0',
+              snapshotToast.type === 'success' ? 'bg-harbor-green/20' :
+              snapshotToast.type === 'warning' ? 'bg-harbor-yellow/20' : 'bg-harbor-cyan/20',
+            ]"
+          >
+            <component
+              :is="snapshotToast.type === 'success' ? CheckCircle : snapshotToast.type === 'warning' ? AlertTriangle : Info"
+              :class="[
+                'w-4 h-4',
+                snapshotToast.type === 'success' ? 'text-harbor-green' :
+                snapshotToast.type === 'warning' ? 'text-harbor-yellow' : 'text-harbor-cyan',
+              ]"
+            />
+          </div>
+          <div class="flex-1 min-w-0">
+            <p
+              :class="[
+                'font-mono text-xs font-semibold',
+                snapshotToast.type === 'success' ? 'text-harbor-green' :
+                snapshotToast.type === 'warning' ? 'text-harbor-yellow' : 'text-harbor-cyan',
+              ]"
+            >
+              {{ snapshotToast.title }}
+            </p>
+            <p class="mt-1 text-[11px] font-mono text-console-200 leading-relaxed">
+              {{ snapshotToast.message }}
+            </p>
+            <div v-if="snapshotToast.action" class="mt-2.5 flex items-center gap-2">
+              <button
+                @click="snapshotToast.action!.onClick(); snapshotToast = null"
+                class="px-3 py-1.5 rounded-md bg-harbor-cyan/15 text-harbor-cyan border border-harbor-cyan/30 text-[10px] font-mono font-semibold hover:bg-harbor-cyan/25 transition-all"
+              >
+                {{ snapshotToast.action.label }}
+              </button>
+              <button
+                @click="snapshotToast = null"
+                class="px-3 py-1.5 rounded-md bg-console-700/50 text-console-400 border border-console-500/30 text-[10px] font-mono hover:text-console-200 transition-all"
+              >
+                关闭
+              </button>
+            </div>
+          </div>
+          <button
+            @click="snapshotToast = null"
+            class="w-6 h-6 rounded-md flex items-center justify-center text-console-400 hover:text-console-100 hover:bg-console-700/60 transition-all flex-shrink-0"
+          >
+            <X class="w-3 h-3" />
+          </button>
         </div>
       </div>
     </Transition>

@@ -20,6 +20,7 @@ import { useScheduleStore } from './schedule';
 import { useAuthStore } from './auth';
 import { SNAPSHOT_CREATE_METHOD_LABELS } from '../types';
 import { format, subHours, subDays } from 'date-fns';
+import { zhCN } from 'date-fns/locale';
 
 function deepClone<T>(obj: T): T {
   return JSON.parse(JSON.stringify(obj));
@@ -635,7 +636,70 @@ export const useSnapshotStore = defineStore('snapshot', () => {
       });
   }
 
+  function findSnapshotNearestToTime(
+    targetTime: Date,
+    options: { withinMinutes?: number; includeArchived?: boolean } = {},
+  ): Snapshot | null {
+    ensureInitialized();
+    const { withinMinutes, includeArchived = false } = options;
+    const targetMs = targetTime.getTime();
+
+    const candidates = includeArchived ? snapshots.value : activeSnapshots.value;
+
+    let best: Snapshot | null = null;
+    let bestDiff = Infinity;
+
+    for (const s of candidates) {
+      const diff = Math.abs(new Date(s.snapshotTime).getTime() - targetMs);
+      if (withinMinutes !== undefined && diff > withinMinutes * 60 * 1000) continue;
+      if (diff < bestDiff) {
+        bestDiff = diff;
+        best = s;
+      }
+    }
+    return best;
+  }
+
+  function findSnapshotsInTimeRange(
+    startTime: Date,
+    endTime: Date,
+    options: { includeArchived?: boolean } = {},
+  ): Snapshot[] {
+    ensureInitialized();
+    const { includeArchived = false } = options;
+    const startMs = startTime.getTime();
+    const endMs = endTime.getTime();
+
+    const candidates = includeArchived ? snapshots.value : activeSnapshots.value;
+
+    return candidates
+      .filter((s) => {
+        const t = new Date(s.snapshotTime).getTime();
+        return t >= startMs && t <= endMs;
+      })
+      .sort(
+        (a, b) => new Date(a.snapshotTime).getTime() - new Date(b.snapshotTime).getTime(),
+      );
+  }
+
+  function createQuickSnapshot(
+    method: SnapshotCreateMethod = 'manual',
+    options: { name?: string; description?: string; tags?: string[] } = {},
+  ): Snapshot | null {
+    const authStore = useAuthStore();
+    const now = new Date();
+    const defaultName = `${format(now, 'yyyy-MM-dd HH:mm', { locale: zhCN })} 手动创建快照`;
+
+    return createSnapshot({
+      name: options.name || defaultName,
+      createMethod: method,
+      description: options.description,
+      tags: options.tags,
+    });
+  }
+
   return {
+    ensureInitialized,
     snapshots,
     selectedSnapshotId,
     selectedSnapshot,
@@ -658,5 +722,8 @@ export const useSnapshotStore = defineStore('snapshot', () => {
     getMethodBgClass,
     compareSnapshots,
     getKeyShipsFromSnapshot,
+    findSnapshotNearestToTime,
+    findSnapshotsInTimeRange,
+    createQuickSnapshot,
   };
 });

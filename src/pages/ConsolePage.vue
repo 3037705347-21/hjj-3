@@ -10,16 +10,17 @@ import ShipListTable from '../components/console/ShipListTable.vue';
 import TideIndicator from '../components/console/TideIndicator.vue';
 import ShipDetailSidebar from '../components/sidebar/ShipDetailSidebar.vue';
 import LogPanel from '../components/logs/LogPanel.vue';
-import { Anchor, History, User, RefreshCw, Settings, Bell, Shield, Users, ClipboardCheck, Layers, AlertTriangle, BarChart3, CalendarDays, CalendarRange, TrendingUp, Download, Handshake, ChevronDown, Wrench, Clock, Zap, Ship, Hammer, X, Camera } from 'lucide-vue-next';
+import { Anchor, History, User, RefreshCw, Settings, Bell, Shield, Users, ClipboardCheck, Layers, AlertTriangle, BarChart3, CalendarDays, CalendarRange, TrendingUp, Download, Handshake, ChevronDown, Wrench, Clock, Zap, Ship, Hammer, X, Camera, CheckCircle, Info } from 'lucide-vue-next';
 import HandoverDialog from '../components/handover/HandoverDialog.vue';
 import HandoverSummary from '../components/handover/HandoverSummary.vue';
 import BerthMaintenanceManager from '../components/console/BerthMaintenanceManager.vue';
 import { format } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
-import type { ScheduleFilterCriteria, OperationStatus } from '../types';
+import type { ScheduleFilterCriteria, OperationStatus, SnapshotCreateMethod } from '../types';
 import { useApprovalStore } from '../stores/approval';
 import { useResourceStore } from '../stores/resource';
 import { useIncidentStore } from '../stores/incident';
+import { useSnapshotStore } from '../stores/snapshot';
 
 type StatKey =
   | 'shipsInPort'
@@ -39,6 +40,7 @@ const authStore = useAuthStore();
 const approvalStore = useApprovalStore();
 const resourceStore = useResourceStore();
 const incidentStore = useIncidentStore();
+const snapshotStore = useSnapshotStore();
 const router = useRouter();
 const route = useRoute();
 
@@ -342,6 +344,107 @@ function onStatCardClick(key: StatKey) {
       break;
   }
 }
+
+const snapshotToast = ref<{
+  show: boolean;
+  type: 'success' | 'info' | 'warning';
+  title: string;
+  message: string;
+  action?: { label: string; onClick: () => void };
+} | null>(null);
+
+let toastTimer: ReturnType<typeof setTimeout> | null = null;
+function showSnapshotToast(toast: Exclude<typeof snapshotToast.value, null>) {
+  if (toastTimer) clearTimeout(toastTimer);
+  snapshotToast.value = toast;
+  toastTimer = setTimeout(() => {
+    snapshotToast.value = null;
+  }, 5000);
+}
+
+const statKeyLabels: Record<StatKey, string> = {
+  shipsInPort: '在港船舶',
+  shipsWaiting: '待泊船舶',
+  utilization: '泊位利用率',
+  operations: '今日作业量',
+  avgWaiting: '平均待泊时长',
+  todayDeparted: '今日离泊船次',
+  conflictShips: '冲突船舶数',
+  overtimeOps: '超时作业数',
+  turnover: '泊位周转率',
+};
+
+function onStatSnapshotAction(
+  key: StatKey,
+  action: 'find-nearest' | 'create-now' | 'view-all',
+) {
+  snapshotStore.ensureInitialized();
+  const now = new Date();
+
+  if (action === 'view-all') {
+    router.push('/snapshots');
+    return;
+  }
+
+  if (action === 'find-nearest') {
+    const nearest = snapshotStore.findSnapshotNearestToTime(now, { withinMinutes: 120 });
+    if (nearest) {
+      const diffMin = Math.round(
+        Math.abs(new Date(nearest.snapshotTime).getTime() - now.getTime()) / 60000,
+      );
+      showSnapshotToast({
+        show: true,
+        type: 'success',
+        title: `找到最近快照（${diffMin} 分钟前）`,
+        message: `${nearest.name} · ${nearest.summary.shipsInPort}在港 / ${nearest.summary.conflictCount}冲突`,
+        action: {
+          label: '查看快照',
+          onClick: () => router.push(`/snapshots/${nearest.id}`),
+        },
+      });
+    } else {
+      showSnapshotToast({
+        show: true,
+        type: 'warning',
+        title: '附近未找到快照',
+        message: '过去 2 小时内没有创建任何快照',
+        action: {
+          label: '立即创建',
+          onClick: () => onStatSnapshotAction(key, 'create-now'),
+        },
+      });
+    }
+    return;
+  }
+
+  if (action === 'create-now') {
+    const methodMap: Partial<Record<StatKey, SnapshotCreateMethod>> = {
+      conflictShips: 'incident',
+      overtimeOps: 'incident',
+      shipsInPort: 'manual',
+    };
+    const created = snapshotStore.createQuickSnapshot(
+      methodMap[key] || 'manual',
+      {
+        name: `${statKeyLabels[key]} 关键节点快照 ${format(now, 'HH:mm', { locale: zhCN })}`,
+        description: `从统计卡片【${statKeyLabels[key]}】触发创建`,
+        tags: [statKeyLabels[key]],
+      },
+    );
+    if (created) {
+      showSnapshotToast({
+        show: true,
+        type: 'success',
+        title: '快照已创建',
+        message: `${created.name} · 已保存当前盘面只读状态`,
+        action: {
+          label: '进入复盘',
+          onClick: () => router.push(`/snapshots/${created.id}`),
+        },
+      });
+    }
+  }
+}
 </script>
 
 <template>
@@ -579,7 +682,7 @@ function onStatCardClick(key: StatKey) {
     </header>
 
     <main class="p-4 space-y-4">
-      <StatsCards @card-click="onStatCardClick" />
+      <StatsCards @card-click="onStatCardClick" @snapshot-action="onStatSnapshotAction" />
 
       <div class="panel-border rounded-lg p-3 bg-console-800/30">
         <div class="flex items-center justify-between gap-3 mb-2">
@@ -678,6 +781,68 @@ function onStatCardClick(key: StatKey) {
       :visible="showMaintenanceManager"
       @close="showMaintenanceManager = false"
     />
+
+    <Teleport to="body">
+      <Transition name="fade">
+        <div
+          v-if="snapshotToast && snapshotToast.show"
+          class="fixed bottom-6 right-6 z-[200] panel-border rounded-xl shadow-2xl backdrop-blur-xl bg-console-800/98 p-4 min-w-[340px] max-w-[420px]"
+        >
+          <div class="flex items-start gap-3">
+            <div
+              :class="[
+                'w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0',
+                snapshotToast.type === 'success' ? 'bg-harbor-green/20' :
+                snapshotToast.type === 'warning' ? 'bg-harbor-yellow/20' : 'bg-harbor-cyan/20',
+              ]"
+            >
+              <component
+                :is="snapshotToast.type === 'success' ? CheckCircle : snapshotToast.type === 'warning' ? AlertTriangle : Info"
+                :class="[
+                  'w-4 h-4',
+                  snapshotToast.type === 'success' ? 'text-harbor-green' :
+                  snapshotToast.type === 'warning' ? 'text-harbor-yellow' : 'text-harbor-cyan',
+                ]"
+              />
+            </div>
+            <div class="flex-1 min-w-0">
+              <p
+                :class="[
+                  'font-mono text-xs font-semibold',
+                  snapshotToast.type === 'success' ? 'text-harbor-green' :
+                  snapshotToast.type === 'warning' ? 'text-harbor-yellow' : 'text-harbor-cyan',
+                ]"
+              >
+                {{ snapshotToast.title }}
+              </p>
+              <p class="mt-1 text-[11px] font-mono text-console-200 leading-relaxed">
+                {{ snapshotToast.message }}
+              </p>
+              <div v-if="snapshotToast.action" class="mt-2.5 flex items-center gap-2">
+                <button
+                  @click="snapshotToast.action!.onClick(); snapshotToast = null"
+                  class="px-3 py-1.5 rounded-md bg-harbor-cyan/15 text-harbor-cyan border border-harbor-cyan/30 text-[10px] font-mono font-semibold hover:bg-harbor-cyan/25 transition-all"
+                >
+                  {{ snapshotToast.action.label }}
+                </button>
+                <button
+                  @click="snapshotToast = null"
+                  class="px-3 py-1.5 rounded-md bg-console-700/50 text-console-400 border border-console-500/30 text-[10px] font-mono hover:text-console-200 transition-all"
+                >
+                  关闭
+                </button>
+              </div>
+            </div>
+            <button
+              @click="snapshotToast = null"
+              class="w-6 h-6 rounded-md flex items-center justify-center text-console-400 hover:text-console-100 hover:bg-console-700/60 transition-all flex-shrink-0"
+            >
+              <X class="w-3 h-3" />
+            </button>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
   </div>
 </template>
 

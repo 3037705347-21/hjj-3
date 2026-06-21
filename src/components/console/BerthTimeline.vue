@@ -1,14 +1,17 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue';
 import { useScheduleStore } from '../../stores/schedule';
+import { useSnapshotStore } from '../../stores/snapshot';
 import { useDragSchedule } from '../../composables/useDragSchedule';
 import { useConflictDetection } from '../../composables/useConflictDetection';
 import TimelineShipBlock from './TimelineShipBlock.vue';
 import ScheduleEditDrawer from '../common/ScheduleEditDrawer.vue';
 import BerthMaintenanceManager from './BerthMaintenanceManager.vue';
 import { format, addHours, differenceInMinutes } from 'date-fns';
-import { AlertTriangle, Wrench, GripVertical, Plus, X, Clock, Waves, Anchor, CheckCircle, XCircle, ShieldAlert, ChevronDown, ChevronUp, AlertCircle } from 'lucide-vue-next';
-import type { BerthSchedule, ScheduleConflict, ScheduleFilterCriteria } from '../../types';
+import { zhCN } from 'date-fns/locale';
+import { useRouter } from 'vue-router';
+import { AlertTriangle, Wrench, GripVertical, Plus, X, Clock, Waves, Anchor, CheckCircle, XCircle, ShieldAlert, ChevronDown, ChevronUp, AlertCircle, Camera, Search, Info } from 'lucide-vue-next';
+import type { BerthSchedule, ScheduleConflict, ScheduleFilterCriteria, SnapshotCreateMethod } from '../../types';
 import { MAINTENANCE_TYPE_LABELS, SHIP_TAG_LABELS } from '../../types';
 
 interface ExternalFilter extends Partial<ScheduleFilterCriteria> {
@@ -20,7 +23,9 @@ const props = defineProps<{
 }>();
 
 const store = useScheduleStore();
+const snapshotStore = useSnapshotStore();
 const { detectAllConflicts } = useConflictDetection();
+const router = useRouter();
 
 const showConflictPanel = ref(false);
 
@@ -397,6 +402,81 @@ watch(
   { deep: true },
 );
 
+const timelineToast = ref<{
+  show: boolean;
+  type: 'success' | 'info' | 'warning';
+  title: string;
+  message: string;
+  action?: { label: string; onClick: () => void };
+} | null>(null);
+
+let toastTimer: ReturnType<typeof setTimeout> | null = null;
+function showToast(toast: Exclude<typeof timelineToast.value, null>) {
+  if (toastTimer) clearTimeout(toastTimer);
+  timelineToast.value = toast;
+  toastTimer = setTimeout(() => {
+    timelineToast.value = null;
+  }, 5000);
+}
+
+function findNearestSnapshot() {
+  snapshotStore.ensureInitialized();
+  const now = new Date();
+  const nearest = snapshotStore.findSnapshotNearestToTime(now, { withinMinutes: 180 });
+  if (nearest) {
+    const diffMin = Math.round(
+      Math.abs(new Date(nearest.snapshotTime).getTime() - now.getTime()) / 60000,
+    );
+    showToast({
+      show: true,
+      type: 'success',
+      title: `找到最近快照（${diffMin >= 0 ? diffMin + ' 分钟前' : '时间附近'}）`,
+      message: `${nearest.name}`,
+      action: {
+        label: '打开快照复盘',
+        onClick: () => router.push(`/snapshots/${nearest.id}`),
+      },
+    });
+  } else {
+    showToast({
+      show: true,
+      type: 'warning',
+      title: '近期未找到快照',
+      message: '过去 3 小时内未创建任何快照',
+      action: {
+        label: '立即保存快照',
+        onClick: () => createTimelineSnapshot(),
+      },
+    });
+  }
+}
+
+function createTimelineSnapshot() {
+  snapshotStore.ensureInitialized();
+  const now = new Date();
+  const hasConflict = conflictStats.value.totalErrors > 0 || conflictStats.value.totalWarnings > 0;
+  const created = snapshotStore.createQuickSnapshot(
+    hasConflict ? 'incident' : 'manual',
+    {
+      name: `时间轴快照·${format(now, 'HH:mm', { locale: zhCN })}·${hasConflict ? '冲突状态' : '正常状态'}`,
+      description: `从泊位调度时间轴触发创建，当前 ${store.schedules.length} 个调度计划`,
+      tags: ['时间轴', hasConflict ? '冲突快照' : '常规快照'],
+    },
+  );
+  if (created) {
+    showToast({
+      show: true,
+      type: 'success',
+      title: '盘面快照已保存',
+      message: `${created.name}`,
+      action: {
+        label: '进入复盘',
+        onClick: () => router.push(`/snapshots/${created.id}`),
+      },
+    });
+  }
+}
+
 onMounted(() => {
   detectAllConflicts(store.schedules, store.ships, store.berths, store.tides, store.activeMaintenancePeriods);
 });
@@ -449,6 +529,22 @@ onMounted(() => {
         >
           <Plus class="w-3.5 h-3.5" />
           新增计划
+        </button>
+        <button
+          @click="findNearestSnapshot()"
+          class="flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-mono text-harbor-cyan bg-harbor-cyan/10 border border-harbor-cyan/30 rounded hover:bg-harbor-cyan/20 transition-all"
+          title="查找当前时间最近的快照"
+        >
+          <Search class="w-3.5 h-3.5" />
+          最近快照
+        </button>
+        <button
+          @click="createTimelineSnapshot()"
+          class="flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-mono text-harbor-green bg-harbor-green/10 border border-harbor-green/30 rounded hover:bg-harbor-green/20 transition-all"
+          title="保存当前盘面为快照"
+        >
+          <Camera class="w-3.5 h-3.5" />
+          保存快照
         </button>
         <button
           @click="showMaintenanceManager = true"
@@ -929,6 +1025,68 @@ onMounted(() => {
       :visible="showMaintenanceManager"
       @close="showMaintenanceManager = false"
     />
+
+    <Teleport to="body">
+      <Transition name="slide-down">
+        <div
+          v-if="timelineToast && timelineToast.show"
+          class="fixed bottom-6 right-6 z-[200] panel-border rounded-xl shadow-2xl backdrop-blur-xl bg-console-800/98 p-4 min-w-[340px] max-w-[420px]"
+        >
+          <div class="flex items-start gap-3">
+            <div
+              :class="[
+                'w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0',
+                timelineToast.type === 'success' ? 'bg-harbor-green/20' :
+                timelineToast.type === 'warning' ? 'bg-harbor-yellow/20' : 'bg-harbor-cyan/20',
+              ]"
+            >
+              <component
+                :is="timelineToast.type === 'success' ? CheckCircle : timelineToast.type === 'warning' ? AlertTriangle : Info"
+                :class="[
+                  'w-4 h-4',
+                  timelineToast.type === 'success' ? 'text-harbor-green' :
+                  timelineToast.type === 'warning' ? 'text-harbor-yellow' : 'text-harbor-cyan',
+                ]"
+              />
+            </div>
+            <div class="flex-1 min-w-0">
+              <p
+                :class="[
+                  'font-mono text-xs font-semibold',
+                  timelineToast.type === 'success' ? 'text-harbor-green' :
+                  timelineToast.type === 'warning' ? 'text-harbor-yellow' : 'text-harbor-cyan',
+                ]"
+              >
+                {{ timelineToast.title }}
+              </p>
+              <p class="mt-1 text-[11px] font-mono text-console-200 leading-relaxed">
+                {{ timelineToast.message }}
+              </p>
+              <div v-if="timelineToast.action" class="mt-2.5 flex items-center gap-2">
+                <button
+                  @click="timelineToast.action!.onClick(); timelineToast = null"
+                  class="px-3 py-1.5 rounded-md bg-harbor-cyan/15 text-harbor-cyan border border-harbor-cyan/30 text-[10px] font-mono font-semibold hover:bg-harbor-cyan/25 transition-all"
+                >
+                  {{ timelineToast.action.label }}
+                </button>
+                <button
+                  @click="timelineToast = null"
+                  class="px-3 py-1.5 rounded-md bg-console-700/50 text-console-400 border border-console-500/30 text-[10px] font-mono hover:text-console-200 transition-all"
+                >
+                  关闭
+                </button>
+              </div>
+            </div>
+            <button
+              @click="timelineToast = null"
+              class="w-6 h-6 rounded-md flex items-center justify-center text-console-400 hover:text-console-100 hover:bg-console-700/60 transition-all flex-shrink-0"
+            >
+              <X class="w-3 h-3" />
+            </button>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
   </div>
 </template>
 
