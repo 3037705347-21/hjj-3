@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useRouter, useRoute } from 'vue-router';
-import { computed, onMounted, ref } from 'vue';
+import { computed, nextTick, onMounted, ref } from 'vue';
 import { useScheduleStore } from '../stores/schedule';
 import { useAuthStore } from '../stores/auth';
 import { USER_ROLE_LABELS } from '../types';
@@ -167,84 +167,111 @@ function getQuickViewCount(key: QuickViewKey): number {
   }
 }
 
+function buildEmptyFilter(): ExternalFilter {
+  filterToken++;
+  return {
+    __token: filterToken,
+    searchQuery: '',
+    statusFilter: 'all',
+    priorityFilter: 'all',
+    cargoTypeFilter: 'all',
+    berthFilter: 'all',
+    conflictFilter: 'all',
+    teamFilter: 'all',
+    etaStart: null,
+    etaEnd: null,
+    progressMin: null,
+    progressMax: null,
+    scheduleIds: null,
+    maintenanceFilter: 'all',
+  };
+}
+
 function applyQuickView(key: QuickViewKey) {
   if (activeQuickView.value === key) {
     clearQuickView();
     return;
   }
-  activeQuickView.value = key;
-  filterToken++;
 
-  const now = Date.now();
-  switch (key) {
-    case 'arriving_6h': {
-      const etaStart = new Date(now).toISOString().slice(0, 16);
-      const etaEnd = new Date(now + 6 * 3600 * 1000).toISOString().slice(0, 16);
-      tableFilter.value = {
-        __token: filterToken,
-        searchQuery: '',
-        statusFilter: 'all',
-        etaStart,
-        etaEnd,
-      };
-      break;
+  tableFilter.value = buildEmptyFilter();
+
+  nextTick(() => {
+    activeQuickView.value = key;
+    filterToken++;
+
+    const now = Date.now();
+    const base: ExternalFilter = {
+      __token: filterToken,
+      searchQuery: '',
+      statusFilter: 'all',
+      priorityFilter: 'all',
+      cargoTypeFilter: 'all',
+      berthFilter: 'all',
+      conflictFilter: 'all',
+      teamFilter: 'all',
+      etaStart: null,
+      etaEnd: null,
+      progressMin: null,
+      progressMax: null,
+      scheduleIds: null,
+      maintenanceFilter: 'all',
+    };
+
+    switch (key) {
+      case 'arriving_6h': {
+        const etaStart = new Date(now).toISOString().slice(0, 16);
+        const etaEnd = new Date(now + 6 * 3600 * 1000).toISOString().slice(0, 16);
+        tableFilter.value = {
+          ...base,
+          etaStart,
+          etaEnd,
+        };
+        break;
+      }
+      case 'has_conflict': {
+        tableFilter.value = {
+          ...base,
+          conflictFilter: 'has_conflict',
+        };
+        break;
+      }
+      case 'operating': {
+        const loadingIds = store.schedules
+          .filter((s) => s.status === 'loading' || s.status === 'unloading')
+          .map((s) => s.id);
+        tableFilter.value = {
+          ...base,
+          scheduleIds: loadingIds,
+        };
+        break;
+      }
+      case 'waiting_departure': {
+        const ids = store.schedules
+          .filter(
+            (s) => s.status === 'berthing' || s.status === 'departing' ||
+                   ((s.status === 'loading' || s.status === 'unloading') && s.operationProgress >= 95),
+          )
+          .map((s) => s.id);
+        tableFilter.value = {
+          ...base,
+          scheduleIds: ids,
+        };
+        break;
+      }
+      case 'maintenance_affected': {
+        tableFilter.value = {
+          ...base,
+          maintenanceFilter: 'affected',
+        };
+        break;
+      }
     }
-    case 'has_conflict': {
-      tableFilter.value = {
-        __token: filterToken,
-        searchQuery: '',
-        statusFilter: 'all',
-        conflictFilter: 'has_conflict',
-      };
-      break;
-    }
-    case 'operating': {
-      const loadingIds = store.schedules
-        .filter((s) => s.status === 'loading' || s.status === 'unloading')
-        .map((s) => s.id);
-      tableFilter.value = {
-        __token: filterToken,
-        searchQuery: '',
-        statusFilter: 'all',
-        scheduleIds: loadingIds,
-      };
-      break;
-    }
-    case 'waiting_departure': {
-      const ids = store.schedules
-        .filter(
-          (s) => s.status === 'berthing' || s.status === 'departing' ||
-                 ((s.status === 'loading' || s.status === 'unloading') && s.operationProgress >= 95),
-        )
-        .map((s) => s.id);
-      tableFilter.value = {
-        __token: filterToken,
-        searchQuery: '',
-        statusFilter: 'all',
-        scheduleIds: ids,
-      };
-      break;
-    }
-    case 'maintenance_affected': {
-      tableFilter.value = {
-        __token: filterToken,
-        searchQuery: '',
-        statusFilter: 'all',
-        maintenanceFilter: 'affected',
-      };
-      break;
-    }
-  }
+  });
 }
 
 function clearQuickView() {
   activeQuickView.value = null;
-  filterToken++;
-  tableFilter.value = {
-    __token: filterToken,
-    searchQuery: '',
-    statusFilter: 'all',
-  };
+  tableFilter.value = buildEmptyFilter();
 }
 
 onMounted(() => {

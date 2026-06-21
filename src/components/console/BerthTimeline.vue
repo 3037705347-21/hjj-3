@@ -225,9 +225,9 @@ const groupedConflicts = computed(() => {
   return byShip;
 });
 
-const highlightedScheduleIds = computed<Set<string> | null>(() => {
+const filteredSchedules = computed<BerthSchedule[]>(() => {
   const f = props.externalFilter;
-  if (!f) return null;
+  if (!f) return store.schedules;
   const hasAnyFilter =
     (f.searchQuery !== undefined && f.searchQuery !== '') ||
     (f.statusFilter !== undefined && f.statusFilter !== 'all') ||
@@ -242,13 +242,12 @@ const highlightedScheduleIds = computed<Set<string> | null>(() => {
     (f.progressMax !== undefined && f.progressMax !== null) ||
     (f.scheduleIds !== undefined && f.scheduleIds !== null && f.scheduleIds.length > 0) ||
     (f.maintenanceFilter !== undefined && f.maintenanceFilter !== 'all');
-  if (!hasAnyFilter) return null;
+  if (!hasAnyFilter) return store.schedules;
 
-  const ids = new Set<string>();
-  store.schedules.forEach((s) => {
+  return store.schedules.filter((s) => {
     const ship = store.getShipById(s.shipId);
     const berth = store.getBerthById(s.berthId);
-    if (!ship || !berth) return;
+    if (!ship || !berth) return false;
 
     if (f.searchQuery) {
       const q = f.searchQuery.toLowerCase();
@@ -256,32 +255,31 @@ const highlightedScheduleIds = computed<Set<string> | null>(() => {
         !ship.name.toLowerCase().includes(q) &&
         !ship.imo.toLowerCase().includes(q) &&
         !berth.name.toLowerCase().includes(q)
-      ) return;
+      ) return false;
     }
-    if (f.statusFilter && f.statusFilter !== 'all' && s.status !== f.statusFilter) return;
-    if (f.priorityFilter && f.priorityFilter !== 'all' && ship.priority !== f.priorityFilter) return;
-    if (f.cargoTypeFilter && f.cargoTypeFilter !== 'all' && ship.cargoType !== f.cargoTypeFilter) return;
-    if (f.berthFilter && f.berthFilter !== 'all' && s.berthId !== f.berthFilter) return;
-    if (f.conflictFilter && f.conflictFilter === 'has_conflict' && !store.scheduleHasConflicts(s.id)) return;
-    if (f.conflictFilter && f.conflictFilter === 'no_conflict' && store.scheduleHasConflicts(s.id)) return;
-    if (f.teamFilter && f.teamFilter !== 'all' && s.operationTeam !== f.teamFilter) return;
+    if (f.statusFilter && f.statusFilter !== 'all' && s.status !== f.statusFilter) return false;
+    if (f.priorityFilter && f.priorityFilter !== 'all' && ship.priority !== f.priorityFilter) return false;
+    if (f.cargoTypeFilter && f.cargoTypeFilter !== 'all' && ship.cargoType !== f.cargoTypeFilter) return false;
+    if (f.berthFilter && f.berthFilter !== 'all' && s.berthId !== f.berthFilter) return false;
+    if (f.conflictFilter && f.conflictFilter === 'has_conflict' && !store.scheduleHasConflicts(s.id)) return false;
+    if (f.conflictFilter && f.conflictFilter === 'no_conflict' && store.scheduleHasConflicts(s.id)) return false;
+    if (f.teamFilter && f.teamFilter !== 'all' && s.operationTeam !== f.teamFilter) return false;
     if (f.etaStart) {
       const start = new Date(f.etaStart).getTime();
-      if (new Date(s.eta).getTime() < start) return;
+      if (new Date(s.eta).getTime() < start) return false;
     }
     if (f.etaEnd) {
       const end = new Date(f.etaEnd).getTime();
-      if (new Date(s.eta).getTime() > end) return;
+      if (new Date(s.eta).getTime() > end) return false;
     }
-    if (f.progressMin !== null && f.progressMin !== undefined && s.operationProgress < f.progressMin) return;
-    if (f.progressMax !== null && f.progressMax !== undefined && s.operationProgress > f.progressMax) return;
-    if (f.scheduleIds && f.scheduleIds.length > 0 && !f.scheduleIds.includes(s.id)) return;
-    if (f.maintenanceFilter && f.maintenanceFilter === 'affected' && !store.isScheduleAffectedByMaintenance(s.id)) return;
-    if (f.maintenanceFilter && f.maintenanceFilter === 'not_affected' && store.isScheduleAffectedByMaintenance(s.id)) return;
+    if (f.progressMin !== null && f.progressMin !== undefined && s.operationProgress < f.progressMin) return false;
+    if (f.progressMax !== null && f.progressMax !== undefined && s.operationProgress > f.progressMax) return false;
+    if (f.scheduleIds && f.scheduleIds.length > 0 && !f.scheduleIds.includes(s.id)) return false;
+    if (f.maintenanceFilter && f.maintenanceFilter === 'affected' && !store.isScheduleAffectedByMaintenance(s.id)) return false;
+    if (f.maintenanceFilter && f.maintenanceFilter === 'not_affected' && store.isScheduleAffectedByMaintenance(s.id)) return false;
 
-    ids.add(s.id);
+    return true;
   });
-  return ids;
 });
 
 function getFailurePosition(failure: { berthId: string; eta: Date; etd: Date }) {
@@ -728,7 +726,7 @@ onMounted(() => {
         </template>
 
         <TimelineShipBlock
-          v-for="schedule in store.schedules"
+          v-for="schedule in filteredSchedules"
           :key="schedule.id"
           :schedule="schedule"
           v-bind="
@@ -742,14 +740,7 @@ onMounted(() => {
           :has-conflict="!!conflictsBySchedule[schedule.id]"
           :error-count="conflictStats.errorCounts[schedule.id] || 0"
           :warning-count="conflictStats.warningCounts[schedule.id] || 0"
-          class="pointer-events-auto transition-all duration-200"
-          :class="[
-            highlightedScheduleIds && !highlightedScheduleIds.has(schedule.id)
-              ? 'opacity-20 saturate-50 grayscale-[30%]'
-              : highlightedScheduleIds && highlightedScheduleIds.has(schedule.id)
-              ? 'ring-2 ring-harbor-cyan/60 ring-offset-1 ring-offset-console-800 rounded shadow-glow-cyan z-10'
-              : '',
-          ]"
+          class="pointer-events-auto"
           @dragstart="startDrag"
           @click="handleShipClick"
         />
