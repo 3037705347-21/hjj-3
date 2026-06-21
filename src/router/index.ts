@@ -144,6 +144,18 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/pages/external/ImportRecordsPage.vue'),
     meta: { title: '导入记录', requireAuth: true },
   },
+  {
+    path: '/scenarios',
+    name: 'scenario-list',
+    component: () => import('@/pages/scenario/ScenarioListPage.vue'),
+    meta: { title: '调度场景推演', requireAuth: true },
+  },
+  {
+    path: '/scenarios/:id',
+    name: 'scenario-detail',
+    component: () => import('@/pages/scenario/ScenarioDetailPage.vue'),
+    meta: { title: '推演详情', requireAuth: true },
+  },
 ];
 
 const router = createRouter({

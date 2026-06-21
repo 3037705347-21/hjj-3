@@ -923,3 +923,62 @@ export const MAINTENANCE_STATUS_LABELS: Record<BerthMaintenancePeriod['status'],
   completed: '已完成',
   cancelled: '已取消',
 };
+
+export type ScenarioStatus = 'draft' | 'completed' | 'applied' | 'cancelled';
+
+export const SCENARIO_STATUS_LABELS: Record<ScenarioStatus, string> = {
+  draft: '推演中',
+  completed: '已完成',
+  applied: '已应用',
+  cancelled: '已取消',
+};
+
+export interface ScenarioShipSnapshot {
+  ships: Ship[];
+  berths: Berth[];
+  schedules: BerthSchedule[];
+  tides: TideRecord[];
+  logs: ScheduleLog[];
+  conflicts: ScheduleConflict[];
+  maintenancePeriods: BerthMaintenancePeriod[];
+}
+
+export interface ScenarioSummary {
+  totalShips: number;
+  totalBerths: number;
+  totalSchedules: number;
+  conflictCount: number;
+  warningCount: number;
+  changedScheduleCount: number;
+  addedScheduleCount: number;
+  deletedScheduleCount: number;
+  berthUtilization: number;
+  avgWaitingMinutes: number;
+}
+
+export interface Scenario {
+  id: string;
+  name: string;
+  description?: string;
+  creator: string;
+  creatorId?: string;
+  baseTime: Date;
+  sourceScenarioId?: string;
+  sourceScenarioName?: string;
+  status: ScenarioStatus;
+  involvedShipIds: string[];
+  involvedBerthIds: string[];
+  snapshot: ScenarioShipSnapshot;
+  resultSummary?: ScenarioSummary;
+  appliedAt?: Date;
+  appliedBy?: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export type ScenarioPermissionModule = 'scenario_manage' | 'scenario_apply';
+
+export const SCENARIO_PERMISSION_MODULE_LABELS: Record<ScenarioPermissionModule, string> = {
+  scenario_manage: '推演场景管理',
+  scenario_apply: '推演结果应用',
+};
