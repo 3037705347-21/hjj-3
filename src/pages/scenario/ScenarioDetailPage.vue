@@ -11,31 +11,25 @@ import {
 } from '../../types';
 import type { BerthSchedule, ScheduleConflict, ScheduleLog } from '../../types';
 import ScenarioComparePanel from '../../components/scenario/ScenarioComparePanel.vue';
+import ScenarioTimeline from '../../components/scenario/ScenarioTimeline.vue';
 import {
   Anchor,
   ArrowLeft,
   Play,
   User,
   Clock,
-  Ship,
+  Calendar,
+  FileText,
+  Layers,
+  Activity,
   AlertTriangle,
   CheckCircle,
-  XCircle,
-  Settings,
-  Bell,
   RefreshCw,
-  Plus,
-  Trash2,
   Edit3,
   Save,
   X,
   Copy,
-  FileText,
-  Calendar,
-  Layers,
-  Activity,
-  ChevronDown,
-  ChevronUp,
+  GripVertical,
 } from 'lucide-vue-next';
 import { format } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
@@ -51,7 +45,7 @@ const scenarioId = computed(() => route.params.id as string);
 const scenario = computed(() => scenarioStore.getScenarioById(scenarioId.value));
 
 const currentTime = ref(new Date());
-const activeTab = ref<'schedules' | 'conflicts' | 'logs'>('schedules');
+const activeTab = ref<'timeline' | 'schedules' | 'conflicts' | 'logs'>('timeline');
 const showApplyConfirm = ref(false);
 const showEditSchedule = ref(false);
 const editingSchedule = ref<BerthSchedule | null>(null);
@@ -356,6 +350,18 @@ function refreshConflicts() {
             <div class="bg-console-800/50 rounded-xl border border-console-500/30 overflow-hidden">
               <div class="flex items-center border-b border-console-500/30">
                 <button
+                  @click="activeTab = 'timeline'"
+                  :class="[
+                    'flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors',
+                    activeTab === 'timeline'
+                      ? 'text-harbor-purple border-harbor-purple'
+                      : 'text-console-400 border-transparent hover:text-console-200',
+                  ]"
+                >
+                  <GripVertical class="w-4 h-4" />
+                  时间轴视图
+                </button>
+                <button
                   @click="activeTab = 'schedules'"
                   :class="[
                     'flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors',
@@ -397,7 +403,21 @@ function refreshConflicts() {
                 </button>
               </div>
 
-              <div class="p-4 max-h-[500px] overflow-y-auto">
+              <div v-if="activeTab === 'timeline'" class="p-0">
+                <ScenarioTimeline
+                  :scenario-id="scenarioId"
+                  :scenario-status="scenario.status"
+                  :ships="scenario.snapshot.ships"
+                  :berths="scenario.snapshot.berths"
+                  :schedules="scenario.snapshot.schedules"
+                  :tides="scenario.snapshot.tides"
+                  :conflicts="scenario.snapshot.conflicts"
+                  :maintenance-periods="scenario.snapshot.maintenancePeriods"
+                  @edit-schedule="(id) => { const s = scenario.snapshot.schedules.find(x => x.id === id); if (s) editSchedule(s); }"
+                />
+              </div>
+
+              <div v-else class="p-4 max-h-[500px] overflow-y-auto">
                 <div v-if="activeTab === 'schedules'">
                   <div class="space-y-2">
                     <div
