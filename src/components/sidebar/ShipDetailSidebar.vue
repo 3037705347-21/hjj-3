@@ -2,6 +2,7 @@
 import { useScheduleStore } from '../../stores/schedule';
 import { X, ChevronRight, Pencil, Copy, Trash2, Clock, AlertTriangle, CheckCircle2, Layers, Building2, HardHat, Cpu, Wrench } from 'lucide-vue-next';
 import ShipInfoCard from './ShipInfoCard.vue';
+import ShipTideWindowCard from './ShipTideWindowCard.vue';
 import OperationProgress from './OperationProgress.vue';
 import StatusActions from './StatusActions.vue';
 import StatusBadge from '../common/StatusBadge.vue';
@@ -283,6 +284,8 @@ function handleSaved(schedule: BerthSchedule) {
         </div>
 
         <ShipInfoCard :ship="store.selectedShip" />
+
+        <ShipTideWindowCard />
 
         <div class="panel-border rounded-lg p-4">
           <div class="flex items-center gap-2 mb-3">
