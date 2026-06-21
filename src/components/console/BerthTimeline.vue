@@ -7,12 +7,32 @@ import TimelineShipBlock from './TimelineShipBlock.vue';
 import ScheduleEditDrawer from '../common/ScheduleEditDrawer.vue';
 import BerthMaintenanceManager from './BerthMaintenanceManager.vue';
 import { format, addHours, differenceInMinutes } from 'date-fns';
-import { AlertTriangle, Wrench, GripVertical, Plus, X, Clock, Waves, Anchor, CheckCircle, XCircle, ShieldAlert } from 'lucide-vue-next';
-import type { BerthSchedule } from '../../types';
-import { MAINTENANCE_TYPE_LABELS } from '../../types';
+import { AlertTriangle, Wrench, GripVertical, Plus, X, Clock, Waves, Anchor, CheckCircle, XCircle, ShieldAlert, ChevronDown, ChevronUp, AlertCircle } from 'lucide-vue-next';
+import type { BerthSchedule, ScheduleConflict } from '../../types';
+import { MAINTENANCE_TYPE_LABELS, SHIP_TAG_LABELS } from '../../types';
 
 const store = useScheduleStore();
 const { detectAllConflicts } = useConflictDetection();
+
+const showConflictPanel = ref(false);
+
+const conflictTypeLabels: Record<string, string> = {
+  time_overlap: '时间冲突',
+  draft_exceed: '吃水超限',
+  length_exceed: '船长超限',
+  cargo_mismatch: '货种不匹配',
+  tide_window: '潮汐窗口',
+  berth_maintenance: '泊位维修',
+  buffer_time_insufficient: '缓冲不足',
+  team_conflict: '班组冲突',
+  dangerous_cargo_isolation: '危货隔离',
+  night_operation_limit: '夜间限制',
+  tag_earliest_time: '最早作业时间',
+  tag_priority_berth: '优先靠泊',
+  tag_forbidden_berth: '禁止泊位类型',
+  tag_missing_remarks: '缺少备注',
+  tag_night_restricted: '标签-夜间限制',
+};
 
 const timelineRef = ref<HTMLElement | null>(null);
 const rowHeight = 56;
@@ -156,6 +176,47 @@ const conflictStats = computed(() => {
 
 const conflictsBySchedule = computed(() => conflictStats.value.scheduleConflicts);
 
+const groupedConflicts = computed(() => {
+  const all = store.conflicts;
+  const byShip: Array<{
+    shipName: string;
+    scheduleId: string;
+    berthName: string;
+    errors: ScheduleConflict[];
+    warnings: ScheduleConflict[];
+  }> = [];
+  const seen = new Set<string>();
+  all.forEach((c) => {
+    const scheduleId = c.scheduleId;
+    if (seen.has(scheduleId)) return;
+    seen.add(scheduleId);
+    const schedule = store.schedules.find((s) => s.id === scheduleId);
+    if (!schedule) return;
+    const ship = store.getShipById(schedule.shipId);
+    const berth = store.getBerthById(schedule.berthId);
+    const shipConflicts = all.filter(
+      (x) => x.scheduleId === scheduleId || x.relatedScheduleId === scheduleId,
+    );
+    const uniqueConflicts: ScheduleConflict[] = [];
+    const conflictIds = new Set<string>();
+    shipConflicts.forEach((x) => {
+      if (!conflictIds.has(x.id)) {
+        conflictIds.add(x.id);
+        uniqueConflicts.push(x);
+      }
+    });
+    byShip.push({
+      shipName: ship?.name || schedule.shipId,
+      scheduleId,
+      berthName: berth?.name || schedule.berthId,
+      errors: uniqueConflicts.filter((x) => x.severity === 'error'),
+      warnings: uniqueConflicts.filter((x) => x.severity === 'warning'),
+    });
+  });
+  byShip.sort((a, b) => b.errors.length - a.errors.length || b.warnings.length - a.warnings.length);
+  return byShip;
+});
+
 function getFailurePosition(failure: { berthId: string; eta: Date; etd: Date }) {
   const berthIndex = store.sortedBerths.findIndex((b) => b.id === failure.berthId);
   if (berthIndex === -1) return null;
@@ -289,24 +350,34 @@ onMounted(() => {
         </span>
       </div>
       <div class="flex items-center gap-2">
-        <div
-          v-if="conflictStats.totalErrors > 0"
-          class="flex items-center gap-1.5 px-2 py-1 rounded bg-harbor-red/20 border border-harbor-red/40"
+        <button
+          v-if="conflictStats.totalErrors > 0 || conflictStats.totalWarnings > 0"
+          @click="showConflictPanel = !showConflictPanel"
+          class="flex items-center gap-2 px-2.5 py-1 rounded border transition-all hover:brightness-110"
+          :class="[
+            conflictStats.totalErrors > 0
+              ? 'bg-harbor-red/20 border-harbor-red/40'
+              : 'bg-harbor-yellow/20 border-harbor-yellow/40',
+          ]"
         >
-          <AlertTriangle class="w-3 h-3 text-harbor-red" />
-          <span class="text-[11px] font-mono text-harbor-red">
-            {{ conflictStats.totalErrors }} 错误
+          <AlertTriangle
+            class="w-3 h-3"
+            :class="conflictStats.totalErrors > 0 ? 'text-harbor-red' : 'text-harbor-yellow'"
+          />
+          <span
+            class="text-[11px] font-mono font-medium"
+            :class="conflictStats.totalErrors > 0 ? 'text-harbor-red' : 'text-harbor-yellow'"
+          >
+            <span v-if="conflictStats.totalErrors > 0">{{ conflictStats.totalErrors }} 错误</span>
+            <span v-if="conflictStats.totalErrors > 0 && conflictStats.totalWarnings > 0"> / </span>
+            <span v-if="conflictStats.totalWarnings > 0">{{ conflictStats.totalWarnings }} 预警</span>
           </span>
-        </div>
-        <div
-          v-if="conflictStats.totalWarnings > 0"
-          class="flex items-center gap-1.5 px-2 py-1 rounded bg-harbor-yellow/20 border border-harbor-yellow/40"
-        >
-          <AlertTriangle class="w-3 h-3 text-harbor-yellow" />
-          <span class="text-[11px] font-mono text-harbor-yellow">
-            {{ conflictStats.totalWarnings }} 预警
-          </span>
-        </div>
+          <component
+            :is="showConflictPanel ? ChevronUp : ChevronDown"
+            class="w-3 h-3"
+            :class="conflictStats.totalErrors > 0 ? 'text-harbor-red' : 'text-harbor-yellow'"
+          />
+        </button>
         <button
           @click="openAddNew"
           class="flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-mono text-console-900 bg-gradient-to-r from-harbor-cyan to-harbor-cyan/80 rounded shadow-glow-cyan hover:shadow-glow-blue transition-all"
@@ -329,6 +400,121 @@ onMounted(() => {
         </button>
       </div>
     </div>
+
+    <Transition name="slide-down">
+      <div
+        v-if="showConflictPanel && groupedConflicts.length > 0"
+        class="border-b border-console-500/30 bg-console-800/50 max-h-80 overflow-y-auto"
+      >
+        <div class="px-4 py-3 space-y-3">
+          <div class="flex items-center gap-2">
+            <AlertTriangle class="w-4 h-4 text-harbor-red" />
+            <h4 class="font-mono text-xs font-semibold text-console-100">
+              冲突与违规提示（点击船舶定位详情）
+            </h4>
+            <span class="ml-auto text-[10px] font-mono text-console-400">
+              共 {{ groupedConflicts.length }} 艘船舶存在问题
+            </span>
+          </div>
+
+          <div
+            v-for="group in groupedConflicts"
+            :key="group.scheduleId"
+            class="rounded-lg border overflow-hidden"
+            :class="
+              group.errors.length > 0
+                ? 'border-harbor-red/30 bg-harbor-red/5'
+                : 'border-harbor-yellow/30 bg-harbor-yellow/5'
+            "
+          >
+            <div
+              class="flex items-center gap-2 px-3 py-2 border-b cursor-pointer hover:brightness-110 transition-all"
+              :class="
+                group.errors.length > 0
+                  ? 'border-harbor-red/20 bg-harbor-red/5'
+                  : 'border-harbor-yellow/20 bg-harbor-yellow/5'
+              "
+              @click="handleShipClick(group.scheduleId)"
+            >
+              <Anchor
+                class="w-3.5 h-3.5"
+                :class="group.errors.length > 0 ? 'text-harbor-red' : 'text-harbor-yellow'"
+              />
+              <span class="text-xs font-mono font-semibold text-console-100">
+                {{ group.shipName }}
+              </span>
+              <span class="text-[10px] font-mono text-console-400">
+                @ {{ group.berthName }}
+              </span>
+              <div class="ml-auto flex items-center gap-1.5">
+                <span
+                  v-if="group.errors.length > 0"
+                  class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-harbor-red/20 text-harbor-red border border-harbor-red/40"
+                >
+                  {{ group.errors.length }} 错误
+                </span>
+                <span
+                  v-if="group.warnings.length > 0"
+                  class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-harbor-yellow/20 text-harbor-yellow border border-harbor-yellow/40"
+                >
+                  {{ group.warnings.length }} 预警
+                </span>
+              </div>
+            </div>
+            <div class="px-3 py-2 space-y-1.5">
+              <div
+                v-for="conflict in group.errors"
+                :key="'err-' + conflict.id"
+                class="flex items-start gap-2"
+              >
+                <AlertCircle class="w-3 h-3 text-harbor-red mt-0.5 flex-shrink-0" />
+                <div class="min-w-0">
+                  <div class="flex items-center gap-1.5 flex-wrap">
+                    <span class="text-[9px] font-mono px-1.5 py-0.5 rounded bg-harbor-red/20 text-harbor-red">
+                      {{ conflictTypeLabels[conflict.type] || conflict.type }}
+                    </span>
+                  </div>
+                  <p class="text-[11px] font-mono text-console-200 mt-0.5 leading-relaxed">
+                    {{ conflict.message }}
+                  </p>
+                  <p
+                    v-if="conflict.suggestedAction"
+                    class="text-[10px] font-mono text-harbor-cyan mt-0.5 flex items-center gap-1"
+                  >
+                    <span class="text-harbor-cyan/60">建议：</span>
+                    {{ conflict.suggestedAction }}
+                  </p>
+                </div>
+              </div>
+              <div
+                v-for="conflict in group.warnings"
+                :key="'warn-' + conflict.id"
+                class="flex items-start gap-2"
+              >
+                <AlertCircle class="w-3 h-3 text-harbor-yellow mt-0.5 flex-shrink-0" />
+                <div class="min-w-0">
+                  <div class="flex items-center gap-1.5 flex-wrap">
+                    <span class="text-[9px] font-mono px-1.5 py-0.5 rounded bg-harbor-yellow/20 text-harbor-yellow">
+                      {{ conflictTypeLabels[conflict.type] || conflict.type }}
+                    </span>
+                  </div>
+                  <p class="text-[11px] font-mono text-console-200 mt-0.5 leading-relaxed">
+                    {{ conflict.message }}
+                  </p>
+                  <p
+                    v-if="conflict.suggestedAction"
+                    class="text-[10px] font-mono text-harbor-cyan mt-0.5 flex items-center gap-1"
+                  >
+                    <span class="text-harbor-cyan/60">建议：</span>
+                    {{ conflict.suggestedAction }}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Transition>
 
     <div
       ref="timelineRef"
@@ -680,3 +866,25 @@ onMounted(() => {
     />
   </div>
 </template>
+
+<style scoped>
+.slide-down-enter-active,
+.slide-down-leave-active {
+  transition: max-height 0.25s ease, opacity 0.25s ease, padding 0.25s ease;
+  overflow: hidden;
+}
+
+.slide-down-enter-from,
+.slide-down-leave-to {
+  max-height: 0;
+  opacity: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+.slide-down-enter-to,
+.slide-down-leave-from {
+  max-height: 32rem;
+  opacity: 1;
+}
+</style>
