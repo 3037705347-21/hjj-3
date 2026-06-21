@@ -192,6 +192,30 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/pages/snapshot/SnapshotDetailPage.vue'),
     meta: { title: '快照详情', requireAuth: true },
   },
+  {
+    path: '/announcements',
+    name: 'announcement-list',
+    component: () => import('@/pages/announcement/AnnouncementListPage.vue'),
+    meta: { title: '港区公告与值班提醒', requireAuth: true },
+  },
+  {
+    path: '/announcements/new',
+    name: 'announcement-new',
+    component: () => import('@/pages/announcement/AnnouncementEditPage.vue'),
+    meta: { title: '新建公告', requireAuth: true },
+  },
+  {
+    path: '/announcements/:id',
+    name: 'announcement-detail',
+    component: () => import('@/pages/announcement/AnnouncementDetailPage.vue'),
+    meta: { title: '公告详情', requireAuth: true },
+  },
+  {
+    path: '/announcements/:id/edit',
+    name: 'announcement-edit',
+    component: () => import('@/pages/announcement/AnnouncementEditPage.vue'),
+    meta: { title: '编辑公告', requireAuth: true },
+  },
 ];
 
 const router = createRouter({

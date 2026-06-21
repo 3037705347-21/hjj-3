@@ -1,0 +1,20 @@
+{
+  "repo_id": "hjj-3-25",
+  "repo_id_suffix_explicit": true,
+  "author": "",
+  "trae_session_id": ".10315052358362:e8ffc93c8ab9e85e01f29e518387309f_6a37cf8b3027c4c3911c4e13.6a37e0873027c4c3911c577a.6a37e085c591a40e18cbcc60:Trae CN.T(2026/6/21 21:00:58)",
+  "user_prompt": "首页统计卡片和日志页对快照的关联还停留在顶部导航入口，继续修复接入现有首页统计卡片和日志主流程，让用户能从首页关键统计、时间轴或日志记录直接定位到对应历史快照或创建复盘快照，而不只是跳到快照模块首页",
+  "repo_url": "https://github.com/3037705347-21/hjj-3",
+  "commit_id": "84f2c0381e48121db06825dcfce82d3c4958a286",
+  "task_type": "Bug修复",
+  "business_domain": "Web前端",
+  "change_scope": "跨模块多文件",
+  "task_difficulty": "一般",
+  "task_completed": "完成了任务",
+  "satisfaction": "满意",
+  "dissatisfaction_reason": "",
+  "single_choice": "",
+  "qa_status": "",
+  "qa_note": "",
+  "submitted_to_byte": ""
+}

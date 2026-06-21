@@ -1,0 +1,21 @@
+{
+  "repo_id": "hjj-3-26",
+  "repo_id_suffix_explicit": true,
+  "author": "",
+  "submitted_at": "2026-06-21 23:09",
+  "trae_session_id": ".10315052358362:e36107ff0f8892baea29c31aa4440d81_6a37e8533027c4c3911c5b19.6a37fc613027c4c3911c69ee.6a37fc5ec591a40e18cbcc65:Trae CN.T(2026/6/21 22:59:45)",
+  "user_prompt": "单条计划编辑没有回写签到记录，排查修复",
+  "repo_url": "https://github.com/3037705347-21/hjj-3",
+  "commit_id": "c48811aecf3b807de41195480f255abf0ac42deb",
+  "task_type": "Bug修复",
+  "business_domain": "Web前端",
+  "change_scope": "单文件",
+  "task_difficulty": "简单",
+  "task_completed": "完成了任务",
+  "satisfaction": "满意",
+  "dissatisfaction_reason": "",
+  "single_choice": "",
+  "qa_status": "",
+  "qa_note": "",
+  "submitted_to_byte": ""
+}

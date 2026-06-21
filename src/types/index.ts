@@ -1164,3 +1164,66 @@ export const SITE_OPERATION_PERMISSION_MODULE_LABELS: Record<SiteOperationPermis
   site_checkin_manage: '现场签到管理',
   site_operation_confirm: '作业确认管理',
 };
+
+export type AnnouncementType = 'port_notice' | 'duty_reminder' | 'berth_adjust' | 'safety_warning' | 'operation_guide';
+
+export const ANNOUNCEMENT_TYPE_LABELS: Record<AnnouncementType, string> = {
+  port_notice: '港区公告',
+  duty_reminder: '值班提醒',
+  berth_adjust: '泊位调整',
+  safety_warning: '安全警告',
+  operation_guide: '作业指引',
+};
+
+export type AnnouncementScope = 'all' | 'berth_group' | 'specific_berths';
+
+export const ANNOUNCEMENT_SCOPE_LABELS: Record<AnnouncementScope, string> = {
+  all: '全港区',
+  berth_group: '泊位组',
+  specific_berths: '指定泊位',
+};
+
+export type AnnouncementStatus = 'draft' | 'published' | 'expired' | 'revoked';
+
+export const ANNOUNCEMENT_STATUS_LABELS: Record<AnnouncementStatus, string> = {
+  draft: '草稿',
+  published: '已发布',
+  expired: '已失效',
+  revoked: '已撤回',
+};
+
+export const ANNOUNCEMENT_STATUS_COLORS: Record<AnnouncementStatus, { bg: string; text: string; border: string }> = {
+  draft: { bg: 'bg-console-500/15', text: 'text-console-300', border: 'border-console-500/30' },
+  published: { bg: 'bg-harbor-green/15', text: 'text-harbor-green', border: 'border-harbor-green/30' },
+  expired: { bg: 'bg-harbor-yellow/15', text: 'text-harbor-yellow', border: 'border-harbor-yellow/30' },
+  revoked: { bg: 'bg-harbor-red/15', text: 'text-harbor-red', border: 'border-harbor-red/30' },
+};
+
+export interface Announcement {
+  id: string;
+  announcementNo: string;
+  title: string;
+  type: AnnouncementType;
+  scope: AnnouncementScope;
+  effectiveTime: Date;
+  expiryTime: Date;
+  publisher: string;
+  publisherId?: string;
+  content: string;
+  relatedBerthIds: string[];
+  isPinned: boolean;
+  status: AnnouncementStatus;
+  publishedAt?: Date;
+  revokedAt?: Date;
+  revokedBy?: string;
+  revokeReason?: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export type AnnouncementPermissionModule = 'announcement_manage' | 'announcement_publish';
+
+export const ANNOUNCEMENT_PERMISSION_MODULE_LABELS: Record<AnnouncementPermissionModule, string> = {
+  announcement_manage: '公告管理',
+  announcement_publish: '公告发布',
+};

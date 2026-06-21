@@ -1,0 +1,20 @@
+{
+  "repo_id": "hjj-3",
+  "author": "",
+  "submitted_at": "2026-06-21 19:29",
+  "trae_session_id": ".10315052358362:de13f652c3aaf972a436f2501bc991a5_6a37c6e23027c4c3911c49f5.6a37c6f73027c4c3911c4a06.6a37c6f6c591a40e18cbcc5c:Trae CN.T(2026/6/21 19:11:53)",
+  "user_prompt": "新增“调度场景推演”模块，模块需要包含推演列表页、推演详情页、创建推演弹窗和方案对比区，核心字段包括推演名称、创建人、基准时间、复制来源、涉及船舶、涉及泊位、推演结果摘要和是否已应用。推演模块需要从现有 ships、berths、schedules、tides 复制一份临时数据集，在独立视图中继续复用时间轴、冲突检测和日志逻辑，只有用户确认“应用到正式计划”后才把变更写回主 schedule store 并生成正式日志。",
+  "repo_url": "https://github.com/3037705347-21/hjj-3",
+  "commit_id": "d284ad9f25a867f2851d901edc0df4aa02ba8733",
+  "task_type": "Feature迭代",
+  "business_domain": "Web前端",
+  "change_scope": "模块内多文件",
+  "task_difficulty": "一般",
+  "task_completed": "未完成任务",
+  "satisfaction": "不满意",
+  "dissatisfaction_reason": "过程不满意：模型对“在独立视图中继续复用时间轴、冲突检测和日志逻辑”的要求覆盖不完整，任务拆解时漏掉了时间轴主视图接入。产物不满意：推演详情页目前只有调度计划列表、冲突检测和推演日志，还不能像正式计划那样通过时间轴完成场景演练。",
+  "single_choice": "",
+  "qa_status": "",
+  "qa_note": "",
+  "submitted_to_byte": ""
+}
