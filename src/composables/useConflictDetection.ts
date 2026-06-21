@@ -515,12 +515,13 @@ export function useConflictDetection() {
       const diffMinutes = earliestMinutes - etaMinutes;
       const diffHours = Math.floor(diffMinutes / 60);
       const diffMins = diffMinutes % 60;
+      const relatedTags = (ship.tags || []).map((t) => SHIP_TAG_LABELS[t]).join('、');
       return {
         id: `conflict-tag-earliest-${schedule.id}`,
         type: 'tag_earliest_time',
         severity: 'error',
         scheduleId: schedule.id,
-        message: `最早作业时间限制: 该船(${SHIP_TAG_LABELS.key_customer || ship.name})最早可作业时间为${earliest}，当前靠泊时间${eta.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}提前了${diffHours > 0 ? diffHours + '小时' : ''}${diffMins > 0 ? diffMins + '分钟' : ''}`,
+        message: `最早作业时间限制: ${ship.name}${relatedTags ? '【' + relatedTags + '】' : ''}最早可作业时间为${earliest}，当前靠泊时间${eta.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}提前了${diffHours > 0 ? diffHours + '小时' : ''}${diffMins > 0 ? diffMins + '分钟' : ''}`,
         suggestedAction: `建议将靠泊时间调整至${earliest}之后`,
       };
     }
@@ -629,13 +630,14 @@ export function useConflictDetection() {
 
       if (!otherPriority && otherEta < scheduleEta) {
         const diffHours = Math.round((scheduleEta - otherEta) / 3600000);
+        const relatedTags = (ship.tags || []).map((t) => SHIP_TAG_LABELS[t]).join('、');
         return {
           id: `conflict-tag-priority-${schedule.id}-${other.id}`,
           type: 'tag_priority_berth',
           severity: 'warning',
           scheduleId: schedule.id,
           relatedScheduleId: other.id,
-          message: `优先靠泊要求: 该船【${SHIP_TAG_LABELS.key_customer}】要求优先靠泊，但当前排在普通船舶${otherShip.name}之后${diffHours}小时`,
+          message: `优先靠泊要求: ${ship.name}${relatedTags ? '【' + relatedTags + '】' : ''}要求优先靠泊，但当前排在普通船舶${otherShip.name}之后${diffHours}小时`,
           suggestedAction: `建议将该船调整至普通船舶之前靠泊，或为普通船舶更换泊位`,
         };
       }

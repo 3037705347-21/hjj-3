@@ -36,6 +36,11 @@ const conflictTypeLabels: Record<string, string> = {
   team_conflict: '班组冲突',
   dangerous_cargo_isolation: '危货隔离',
   night_operation_limit: '夜间限制',
+  tag_earliest_time: '最早作业时间',
+  tag_priority_berth: '优先靠泊',
+  tag_forbidden_berth: '禁止泊位类型',
+  tag_missing_remarks: '缺少备注',
+  tag_night_restricted: '标签-夜间限制',
 };
 </script>
 
