@@ -277,6 +277,14 @@ export const useScheduleStore = defineStore('schedule', () => {
       });
     }
     recordAudit('schedule_write', id, `更新调度计划 ${id}`, beforeFull, afterFull);
+
+    if ('operationTeam' in changedBefore && changedBefore.operationTeam !== changedAfter.operationTeam) {
+      try {
+        const siteCheckinStore = useSiteCheckinStore();
+        siteCheckinStore.syncTeamNameFromSchedule(id);
+      } catch {
+      }
+    }
   }
 
   function checkAndWarnDelay(
