@@ -17,8 +17,15 @@ import type {
   ShipPriority,
   BerthMaintenancePeriod,
   MaintenanceType,
+  ShipTag,
+  ShipGuaranteeRequirements,
 } from '../types';
-import { MAINTENANCE_TYPE_LABELS, MAINTENANCE_IMPACT_SCOPE_LABELS } from '../types';
+import {
+  MAINTENANCE_TYPE_LABELS,
+  MAINTENANCE_IMPACT_SCOPE_LABELS,
+  SHIP_TAG_LABELS,
+  FORBIDDEN_BERTH_CATEGORY_LABELS,
+} from '../types';
 import {
   mockShips,
   mockBerths,
@@ -313,6 +320,7 @@ export const useScheduleStore = defineStore('schedule', () => {
     const schedule = schedules.value.find((s) => s.id === id);
     if (!schedule) return;
     const beforeStatus = schedule.status;
+    const ship = ships.value.find((s) => s.id === schedule.shipId);
     schedule.status = status;
 
     const now = new Date();
@@ -347,13 +355,17 @@ export const useScheduleStore = defineStore('schedule', () => {
       }
     }
 
+    const tagInfo = ship?.tags && ship.tags.length > 0
+      ? ` [标签:${ship.tags.map((t) => SHIP_TAG_LABELS[t]).join(',')}]`
+      : '';
+
     addLog({
       type: 'status_change',
       scheduleId: id,
       shipId: schedule.shipId,
-      description: `状态由 ${beforeStatus} 变更为 ${status}`,
+      description: `状态由 ${beforeStatus} 变更为 ${status}${tagInfo}`,
       before: { status: beforeStatus },
-      after: { status },
+      after: { status, shipTags: ship?.tags || [] },
     });
   }
 
@@ -1033,6 +1045,58 @@ export const useScheduleStore = defineStore('schedule', () => {
     });
   }
 
+  function updateShipTags(shipId: string, tags: ShipTag[]) {
+    const ship = ships.value.find((s) => s.id === shipId);
+    if (!ship) return;
+    const beforeTags = ship.tags ? [...ship.tags] : [];
+    ship.tags = tags;
+
+    const beforeLabels = beforeTags.map((t) => SHIP_TAG_LABELS[t]).join('、') || '无';
+    const afterLabels = tags.map((t) => SHIP_TAG_LABELS[t]).join('、') || '无';
+
+    addLog({
+      type: 'update',
+      shipId,
+      description: `更新船舶标签: ${ship.name} 由 [${beforeLabels}] 变更为 [${afterLabels}]`,
+      before: { tags: beforeTags },
+      after: { tags },
+    });
+    recordAudit('schedule_write', shipId, `更新船舶标签 ${ship.name}`, { tags: beforeTags }, { tags });
+  }
+
+  function updateShipGuaranteeRequirements(shipId: string, requirements: Partial<ShipGuaranteeRequirements>) {
+    const ship = ships.value.find((s) => s.id === shipId);
+    if (!ship) return;
+    const before = ship.guaranteeRequirements ? { ...ship.guaranteeRequirements } : {};
+    ship.guaranteeRequirements = { ...ship.guaranteeRequirements, ...requirements };
+
+    const formatRequirements = (r: Partial<ShipGuaranteeRequirements>) => {
+      const parts: string[] = [];
+      if (r.earliestOperationTime) parts.push(`最早作业:${r.earliestOperationTime}`);
+      if (r.mustPriorityBerth) parts.push('优先靠泊');
+      if (r.forbiddenBerthCategories?.length) {
+        parts.push(`禁止泊位:${r.forbiddenBerthCategories.map((c) => FORBIDDEN_BERTH_CATEGORY_LABELS[c]).join(',')}`);
+      }
+      if (r.requiresRemarks) parts.push('必填备注');
+      return parts.join('; ') || '无';
+    };
+
+    addLog({
+      type: 'update',
+      shipId,
+      description: `更新船舶保障要求: ${ship.name} 由 [${formatRequirements(before)}] 变更为 [${formatRequirements(ship.guaranteeRequirements)}]`,
+      before: { guaranteeRequirements: before } as unknown as Record<string, unknown>,
+      after: { guaranteeRequirements: ship.guaranteeRequirements } as unknown as Record<string, unknown>,
+    });
+    recordAudit(
+      'schedule_write',
+      shipId,
+      `更新船舶保障要求 ${ship.name}`,
+      { guaranteeRequirements: before } as unknown as Record<string, unknown>,
+      { guaranteeRequirements: ship.guaranteeRequirements } as unknown as Record<string, unknown>,
+    );
+  }
+
   function checkExistingSchedulesForMaintenance(period: BerthMaintenancePeriod) {
     const mStart = new Date(period.startTime).getTime();
     const mEnd = new Date(period.endTime).getTime();
@@ -1129,5 +1193,7 @@ export const useScheduleStore = defineStore('schedule', () => {
     addMaintenancePeriod,
     updateMaintenancePeriod,
     deleteMaintenancePeriod,
+    updateShipTags,
+    updateShipGuaranteeRequirements,
   };
 });

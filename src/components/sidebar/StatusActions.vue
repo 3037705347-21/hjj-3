@@ -16,8 +16,14 @@ import {
   AlertTriangle,
   Lock,
   Layers,
+  Shield,
+  Clock,
+  Ban,
+  FileText,
+  Zap,
 } from 'lucide-vue-next';
-import { ref, watch } from 'vue';
+import { ref, watch, computed } from 'vue';
+import { SHIP_TAG_LABELS, FORBIDDEN_BERTH_CATEGORY_LABELS } from '../../types';
 
 const props = defineProps<{
   schedule: BerthSchedule;
@@ -29,6 +35,122 @@ const resourceStore = useResourceStore();
 const router = useRouter();
 const remarkInput = ref(props.schedule.remarks || '');
 const delayReasonInput = ref(props.schedule.delayReason || '');
+
+const ship = computed(() => store.getShipById(props.schedule.shipId));
+const hasTags = computed(() => ship.value?.tags && ship.value.tags.length > 0);
+const hasGuarantees = computed(() => {
+  const g = ship.value?.guaranteeRequirements;
+  if (!g) return false;
+  return g.earliestOperationTime || g.mustPriorityBerth || (g.forbiddenBerthCategories && g.forbiddenBerthCategories.length > 0) || g.requiresRemarks;
+});
+
+interface TagValidationResult {
+  type: 'error' | 'warning';
+  icon: typeof AlertTriangle;
+  iconColor: string;
+  title: string;
+  message: string;
+}
+
+function validateTagsForStatus(status: OperationStatus): TagValidationResult[] {
+  const results: TagValidationResult[] = [];
+  if (!ship.value) return results;
+
+  const tags = ship.value.tags || [];
+  const guarantees = ship.value.guaranteeRequirements || {};
+  const now = new Date();
+
+  if (status === 'berthing' || status === 'loading' || status === 'unloading') {
+    if (guarantees.earliestOperationTime) {
+      const [h, m] = guarantees.earliestOperationTime.split(':').map(Number);
+      const nowMinutes = now.getHours() * 60 + now.getMinutes();
+      const earliestMinutes = h * 60 + m;
+      if (nowMinutes < earliestMinutes) {
+        results.push({
+          type: 'error',
+          icon: Clock,
+          iconColor: 'text-harbor-cyan',
+          title: '最早作业时间未到',
+          message: `该船要求最早${guarantees.earliestOperationTime}后方可开始作业，当前时间${now.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}尚早`,
+        });
+      }
+    }
+
+    if (tags.includes('night_restricted')) {
+      const hour = now.getHours();
+      if (hour >= 22 || hour < 6) {
+        results.push({
+          type: 'error',
+          icon: AlertTriangle,
+          iconColor: 'text-harbor-red',
+          title: `夜间作业限制【${SHIP_TAG_LABELS.night_restricted}】`,
+          message: '该船禁止在夜间(22:00-06:00)进行作业，请等待至白天时段',
+        });
+      }
+    }
+
+    if (tags.includes('dangerous_operation')) {
+      const hour = now.getHours();
+      if (hour >= 22 || hour < 6) {
+        results.push({
+          type: 'error',
+          icon: AlertTriangle,
+          iconColor: 'text-harbor-red',
+          title: `夜间作业限制【${SHIP_TAG_LABELS.dangerous_operation}】`,
+          message: '危险作业船舶禁止在夜间(22:00-06:00)进行作业，请等待至白天时段',
+        });
+      }
+    }
+
+    if (guarantees.requiresRemarks && (!props.schedule.remarks || props.schedule.remarks.trim().length === 0)) {
+      results.push({
+        type: 'warning',
+        icon: FileText,
+        iconColor: 'text-harbor-blue',
+        title: '缺少作业备注',
+        message: '该船舶要求必须填写作业备注，请先在下方"调度备注"中补充说明',
+      });
+    }
+  }
+
+  if (status === 'berthing' && guarantees.mustPriorityBerth) {
+    const sameBerthSchedules = store.schedules.filter(
+      (s) => s.berthId === props.schedule.berthId && s.id !== props.schedule.id && s.status !== 'departed',
+    );
+    const hasNonPriorityBefore = sameBerthSchedules.some((s) => {
+      const otherShip = store.getShipById(s.shipId);
+      return !otherShip?.guaranteeRequirements?.mustPriorityBerth && new Date(s.eta).getTime() < new Date(props.schedule.eta).getTime();
+    });
+    if (hasNonPriorityBefore) {
+      results.push({
+        type: 'warning',
+        icon: Zap,
+        iconColor: 'text-harbor-orange',
+        title: `优先靠泊要求【${SHIP_TAG_LABELS.key_customer}】`,
+        message: '该船要求优先靠泊，但同泊位有普通船舶排在前面，建议调整顺序',
+      });
+    }
+  }
+
+  if (status === 'berthing' && guarantees.forbiddenBerthCategories && guarantees.forbiddenBerthCategories.length > 0) {
+    const berth = store.getBerthById(props.schedule.berthId);
+    if (berth && berth.allowedCargo[0]) {
+      const categoryMap: Record<string, string> = { container: 'container', bulk: 'bulk', liquid: 'liquid', general: 'general', 'ro-ro': 'ro-ro' };
+      const berthCategory = categoryMap[berth.allowedCargo[0]];
+      if (berthCategory && guarantees.forbiddenBerthCategories.includes(berthCategory as any)) {
+        results.push({
+          type: 'error',
+          icon: Ban,
+          iconColor: 'text-harbor-red',
+          title: '泊位类型禁止',
+          message: `该船被禁止分配至【${FORBIDDEN_BERTH_CATEGORY_LABELS[berthCategory as keyof typeof FORBIDDEN_BERTH_CATEGORY_LABELS]}】泊位(当前：${berth.name})，请更换泊位`,
+        });
+      }
+    }
+  }
+
+  return results;
+}
 
 watch(
   () => props.schedule.remarks,
@@ -70,6 +192,23 @@ function updateStatus(status: OperationStatus) {
       if (confirm(`资源分配检查未通过：${check.reason}\n\n是否前往资源协同页面进行分配？`)) {
         router.push('/resources');
       }
+      return;
+    }
+  }
+
+  const tagValidations = validateTagsForStatus(status);
+  const errors = tagValidations.filter((v) => v.type === 'error');
+  const warnings = tagValidations.filter((v) => v.type === 'warning');
+
+  if (errors.length > 0) {
+    const errorMsg = errors.map((e) => `【${e.title}】${e.message}`).join('\n\n');
+    alert(`标签规则校验失败（${errors.length}项错误）：\n\n${errorMsg}`);
+    return;
+  }
+
+  if (warnings.length > 0) {
+    const warnMsg = warnings.map((w) => `【${w.title}】${w.message}`).join('\n\n');
+    if (!confirm(`标签规则提醒（${warnings.length}项警告）：\n\n${warnMsg}\n\n是否仍然继续？`)) {
       return;
     }
   }
@@ -155,6 +294,71 @@ function saveDelayReason() {
           >
             前往资源协同 →
           </button>
+        </div>
+      </div>
+    </div>
+
+    <div v-if="hasTags || hasGuarantees" class="mb-4">
+      <div v-for="validation in validateTagsForStatus('berthing')" :key="validation.title" class="mb-2 last:mb-0">
+        <div
+          :class="[
+            'flex items-start gap-2 p-2 rounded border',
+            validation.type === 'error'
+              ? 'bg-harbor-red/10 border-harbor-red/30'
+              : 'bg-harbor-yellow/10 border-harbor-yellow/30',
+          ]"
+        >
+          <component
+            :is="validation.icon"
+            :class="['w-3.5 h-3.5 mt-0.5 flex-shrink-0', validation.iconColor]"
+          />
+          <div class="flex-1 min-w-0">
+            <p
+              :class="[
+                'text-[10px] font-mono font-medium mb-0.5',
+                validation.type === 'error' ? 'text-harbor-red' : 'text-harbor-yellow',
+              ]"
+            >
+              {{ validation.title }}
+            </p>
+            <p class="text-[10px] font-mono text-console-300 leading-relaxed">
+              {{ validation.message }}
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div v-if="hasGuarantees" class="mb-4 p-3 rounded-lg bg-harbor-orange/5 border border-harbor-orange/20">
+      <div class="flex items-center gap-2 mb-2">
+        <Shield class="w-3.5 h-3.5 text-harbor-orange" />
+        <p class="text-[10px] font-mono font-medium text-harbor-orange uppercase tracking-wider">
+          保障要求提醒
+        </p>
+      </div>
+      <div class="space-y-1.5">
+        <div v-if="ship?.guaranteeRequirements?.earliestOperationTime" class="flex items-center gap-1.5 text-[10px] font-mono text-console-300">
+          <Clock class="w-3 h-3 text-harbor-cyan flex-shrink-0" />
+          <span>最早作业时间：</span>
+          <span class="text-harbor-cyan font-semibold">{{ ship.guaranteeRequirements.earliestOperationTime }}</span>
+        </div>
+        <div v-if="ship?.guaranteeRequirements?.mustPriorityBerth" class="flex items-center gap-1.5 text-[10px] font-mono text-console-300">
+          <Zap class="w-3 h-3 text-harbor-orange flex-shrink-0" />
+          <span class="text-harbor-orange font-semibold">必须优先靠泊</span>
+        </div>
+        <div v-if="ship?.guaranteeRequirements?.forbiddenBerthCategories?.length" class="flex items-start gap-1.5 text-[10px] font-mono text-console-300">
+          <Ban class="w-3 h-3 text-harbor-red flex-shrink-0 mt-0.5" />
+          <span>禁止泊位类型：</span>
+          <span class="text-harbor-red font-semibold">
+            {{ ship.guaranteeRequirements.forbiddenBerthCategories.map(c => FORBIDDEN_BERTH_CATEGORY_LABELS[c]).join('、') }}
+          </span>
+        </div>
+        <div v-if="ship?.guaranteeRequirements?.requiresRemarks" class="flex items-center gap-1.5 text-[10px] font-mono text-console-300">
+          <FileText class="w-3 h-3 text-harbor-blue flex-shrink-0" />
+          <span class="text-harbor-blue font-semibold">必须填写备注</span>
+          <span v-if="!schedule.remarks || schedule.remarks.trim().length === 0" class="text-harbor-yellow">
+            ⚠ 未填写
+          </span>
         </div>
       </div>
     </div>

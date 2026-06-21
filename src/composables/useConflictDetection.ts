@@ -7,8 +7,22 @@ import type {
   CargoType,
   BerthMaintenancePeriod,
   MaintenanceImpactScope,
+  ForbiddenBerthCategory,
 } from '../types';
-import { MAINTENANCE_TYPE_LABELS, MAINTENANCE_IMPACT_SCOPE_LABELS } from '../types';
+import {
+  MAINTENANCE_TYPE_LABELS,
+  MAINTENANCE_IMPACT_SCOPE_LABELS,
+  SHIP_TAG_LABELS,
+  FORBIDDEN_BERTH_CATEGORY_LABELS,
+} from '../types';
+
+const BERTH_CATEGORY_MAP: Record<string, ForbiddenBerthCategory> = {
+  container: 'container',
+  bulk: 'bulk',
+  liquid: 'liquid',
+  general: 'general',
+  'ro-ro': 'ro-ro',
+};
 
 export function useConflictDetection() {
   function getAffectedBerthIdsForMaintenance(
@@ -94,7 +108,26 @@ export function useConflictDetection() {
 
         const nightConflict = checkNightOperation(schedule, ship);
         if (nightConflict) conflicts.push(nightConflict);
+
+        const earliestTimeConflict = checkTagEarliestOperationTime(schedule, ship);
+        if (earliestTimeConflict) conflicts.push(earliestTimeConflict);
+
+        const forbiddenBerthConflict = checkTagForbiddenBerth(schedule, ship, berth);
+        if (forbiddenBerthConflict) conflicts.push(forbiddenBerthConflict);
+
+        const missingRemarksConflict = checkTagMissingRemarks(schedule, ship);
+        if (missingRemarksConflict) conflicts.push(missingRemarksConflict);
+
+        const tagNightConflict = checkTagNightRestricted(schedule, ship);
+        if (tagNightConflict) conflicts.push(tagNightConflict);
       }
+    });
+
+    schedules.forEach((schedule) => {
+      const ship = ships.find((s) => s.id === schedule.shipId);
+      if (!ship) return;
+      const priorityConflict = checkTagPriorityBerth(schedule, ship, schedules, ships);
+      if (priorityConflict) conflicts.push(priorityConflict);
     });
 
     const activeMaintenance = maintenancePeriods.filter(
@@ -464,6 +497,146 @@ export function useConflictDetection() {
     return null;
   }
 
+  function checkTagEarliestOperationTime(
+    schedule: BerthSchedule,
+    ship: Ship,
+  ): ScheduleConflict | null {
+    const earliest = ship.guaranteeRequirements?.earliestOperationTime;
+    if (!earliest) return null;
+
+    const [earliestHour, earliestMinute] = earliest.split(':').map(Number);
+    if (isNaN(earliestHour) || isNaN(earliestMinute)) return null;
+
+    const eta = new Date(schedule.eta);
+    const etaMinutes = eta.getHours() * 60 + eta.getMinutes();
+    const earliestMinutes = earliestHour * 60 + earliestMinute;
+
+    if (etaMinutes < earliestMinutes) {
+      const diffMinutes = earliestMinutes - etaMinutes;
+      const diffHours = Math.floor(diffMinutes / 60);
+      const diffMins = diffMinutes % 60;
+      return {
+        id: `conflict-tag-earliest-${schedule.id}`,
+        type: 'tag_earliest_time',
+        severity: 'error',
+        scheduleId: schedule.id,
+        message: `最早作业时间限制: 该船(${SHIP_TAG_LABELS.key_customer || ship.name})最早可作业时间为${earliest}，当前靠泊时间${eta.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}提前了${diffHours > 0 ? diffHours + '小时' : ''}${diffMins > 0 ? diffMins + '分钟' : ''}`,
+        suggestedAction: `建议将靠泊时间调整至${earliest}之后`,
+      };
+    }
+    return null;
+  }
+
+  function checkTagForbiddenBerth(
+    schedule: BerthSchedule,
+    ship: Ship,
+    berth: Berth,
+  ): ScheduleConflict | null {
+    const forbidden = ship.guaranteeRequirements?.forbiddenBerthCategories;
+    if (!forbidden || forbidden.length === 0) return null;
+
+    const berthCategory = BERTH_CATEGORY_MAP[berth.allowedCargo[0]];
+    if (!berthCategory) return null;
+
+    if (forbidden.includes(berthCategory)) {
+      return {
+        id: `conflict-tag-forbidden-berth-${schedule.id}`,
+        type: 'tag_forbidden_berth',
+        severity: 'error',
+        scheduleId: schedule.id,
+        message: `泊位类型禁止: 该船被禁止分配至【${FORBIDDEN_BERTH_CATEGORY_LABELS[berthCategory]}】泊位，当前泊位${berth.name}类型不匹配`,
+        suggestedAction: `建议更换至非${forbidden.map((c) => FORBIDDEN_BERTH_CATEGORY_LABELS[c]).join('、')}类型的泊位`,
+      };
+    }
+    return null;
+  }
+
+  function checkTagMissingRemarks(
+    schedule: BerthSchedule,
+    ship: Ship,
+  ): ScheduleConflict | null {
+    if (!ship.guaranteeRequirements?.requiresRemarks) return null;
+    if (schedule.remarks && schedule.remarks.trim().length > 0) return null;
+
+    return {
+      id: `conflict-tag-missing-remarks-${schedule.id}`,
+      type: 'tag_missing_remarks',
+      severity: 'warning',
+      scheduleId: schedule.id,
+      message: `缺少备注信息: 该船舶要求必须填写作业备注，但当前调度计划备注为空`,
+      suggestedAction: `建议在调度计划中补充作业备注，说明特殊保障要求`,
+    };
+  }
+
+  function checkTagNightRestricted(
+    schedule: BerthSchedule,
+    ship: Ship,
+  ): ScheduleConflict | null {
+    if (!ship.tags?.includes('night_restricted')) return null;
+
+    const eta = new Date(schedule.eta);
+    const etd = new Date(schedule.etd);
+
+    const current = new Date(eta);
+    let conflictHours = 0;
+
+    while (current < etd) {
+      const hour = current.getHours();
+      if (hour >= NIGHT_START_HOUR || hour < NIGHT_END_HOUR) {
+        conflictHours++;
+      }
+      current.setHours(current.getHours() + 1);
+    }
+
+    if (conflictHours > 0) {
+      return {
+        id: `conflict-tag-night-${schedule.id}`,
+        type: 'tag_night_restricted',
+        severity: 'error',
+        scheduleId: schedule.id,
+        message: `夜间作业限制【${SHIP_TAG_LABELS.night_restricted}】: 该船禁止夜间作业，冲突时长约${conflictHours}小时`,
+        suggestedAction: `建议调整作业时间至${NIGHT_END_HOUR}:00-${NIGHT_START_HOUR}:00之间的白天时段`,
+      };
+    }
+    return null;
+  }
+
+  function checkTagPriorityBerth(
+    schedule: BerthSchedule,
+    ship: Ship,
+    allSchedules: BerthSchedule[],
+    allShips: Ship[],
+  ): ScheduleConflict | null {
+    if (!ship.guaranteeRequirements?.mustPriorityBerth) return null;
+
+    const sameBerthSchedules = allSchedules.filter(
+      (s) => s.berthId === schedule.berthId && s.id !== schedule.id,
+    );
+
+    for (const other of sameBerthSchedules) {
+      const otherShip = allShips.find((s) => s.id === other.shipId);
+      if (!otherShip) continue;
+
+      const otherPriority = otherShip.guaranteeRequirements?.mustPriorityBerth;
+      const otherEta = new Date(other.eta).getTime();
+      const scheduleEta = new Date(schedule.eta).getTime();
+
+      if (!otherPriority && otherEta < scheduleEta) {
+        const diffHours = Math.round((scheduleEta - otherEta) / 3600000);
+        return {
+          id: `conflict-tag-priority-${schedule.id}-${other.id}`,
+          type: 'tag_priority_berth',
+          severity: 'warning',
+          scheduleId: schedule.id,
+          relatedScheduleId: other.id,
+          message: `优先靠泊要求: 该船【${SHIP_TAG_LABELS.key_customer}】要求优先靠泊，但当前排在普通船舶${otherShip.name}之后${diffHours}小时`,
+          suggestedAction: `建议将该船调整至普通船舶之前靠泊，或为普通船舶更换泊位`,
+        };
+      }
+    }
+    return null;
+  }
+
   return {
     detectAllConflicts,
     checkTimeOverlap,
@@ -477,6 +650,11 @@ export function useConflictDetection() {
     checkDangerousCargoIsolation,
     checkNightOperation,
     checkMaintenancePeriodOverlap,
+    checkTagEarliestOperationTime,
+    checkTagForbiddenBerth,
+    checkTagMissingRemarks,
+    checkTagNightRestricted,
+    checkTagPriorityBerth,
     hasConflicts,
   };
 }

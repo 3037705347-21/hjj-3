@@ -4,6 +4,7 @@ import { useScheduleStore } from '../../stores/schedule';
 import PriorityBadge from '../common/PriorityBadge.vue';
 import StatusBadge from '../common/StatusBadge.vue';
 import CargoTypeIcon from '../common/CargoTypeIcon.vue';
+import ShipTagBadge from '../common/ShipTagBadge.vue';
 import ScheduleEditDrawer from '../common/ScheduleEditDrawer.vue';
 import { format, differenceInHours, differenceInMinutes } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
@@ -805,11 +806,21 @@ watch(selectedIds, () => {
                     'bg-console-400': row.ship?.priority === 'low',
                   }"
                 />
-                <div>
-                  <p class="font-semibold text-console-100">{{ row.ship?.name }}</p>
+                <div class="min-w-0">
+                  <div class="flex items-center gap-1.5">
+                    <p class="font-semibold text-console-100 truncate">{{ row.ship?.name }}</p>
+                  </div>
                   <p class="text-[10px] text-console-400">
                     {{ row.ship?.imo }} · {{ row.ship?.length }}m/{{ row.ship?.draft }}m
                   </p>
+                  <div v-if="row.ship?.tags && row.ship.tags.length > 0" class="flex flex-wrap gap-1 mt-1">
+                    <ShipTagBadge
+                      v-for="tag in row.ship.tags"
+                      :key="tag"
+                      :tag="tag"
+                      size="xs"
+                    />
+                  </div>
                 </div>
               </div>
             </td>

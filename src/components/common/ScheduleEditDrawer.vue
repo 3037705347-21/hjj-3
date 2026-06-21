@@ -20,8 +20,10 @@ import {
 } from 'lucide-vue-next';
 import PriorityBadge from '../common/PriorityBadge.vue';
 import CargoTypeIcon from '../common/CargoTypeIcon.vue';
+import ShipTagBadge from '../common/ShipTagBadge.vue';
 import { format } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
+import { FORBIDDEN_BERTH_CATEGORY_LABELS, SHIP_TAG_LABELS } from '../../types';
 
 const props = defineProps<{
   visible: boolean;
@@ -47,6 +49,11 @@ const {
   checkTeamConflict,
   checkDangerousCargoIsolation,
   checkNightOperation,
+  checkTagEarliestOperationTime,
+  checkTagForbiddenBerth,
+  checkTagMissingRemarks,
+  checkTagNightRestricted,
+  checkTagPriorityBerth,
 } = useConflictDetection();
 
 type FormData = {
@@ -253,6 +260,23 @@ function runConflictCheck(): ScheduleConflict[] {
   const nightC = checkNightOperation(tempSchedule, ship);
   if (nightC) result.push(nightC);
 
+  const earliestTimeC = checkTagEarliestOperationTime(tempSchedule, ship);
+  if (earliestTimeC) result.push(earliestTimeC);
+
+  if (berth) {
+    const forbiddenBerthC = checkTagForbiddenBerth(tempSchedule, ship, berth);
+    if (forbiddenBerthC) result.push(forbiddenBerthC);
+  }
+
+  const missingRemarksC = checkTagMissingRemarks(tempSchedule, ship);
+  if (missingRemarksC) result.push(missingRemarksC);
+
+  const tagNightC = checkTagNightRestricted(tempSchedule, ship);
+  if (tagNightC) result.push(tagNightC);
+
+  const priorityC = checkTagPriorityBerth(tempSchedule, ship, store.schedules, store.ships);
+  if (priorityC) result.push(priorityC);
+
   return result;
 }
 
@@ -270,6 +294,11 @@ const conflictTypeLabels: Record<string, string> = {
   team_conflict: '班组冲突',
   dangerous_cargo_isolation: '危货隔离',
   night_operation_limit: '夜间限制',
+  tag_earliest_time: '最早作业时间',
+  tag_priority_berth: '优先靠泊',
+  tag_forbidden_berth: '禁止泊位类型',
+  tag_missing_remarks: '缺少备注',
+  tag_night_restricted: '标签-夜间限制',
 };
 
 async function onSubmit() {
@@ -429,9 +458,49 @@ async function onSubmit() {
                 <p v-if="errors.shipId" class="text-[10px] font-mono text-harbor-red mt-1">
                   {{ errors.shipId }}
                 </p>
-                <div v-if="selectedShip" class="mt-2 flex items-center gap-2 text-[11px] font-mono">
-                  <CargoTypeIcon :type="selectedShip.cargoType" show-label :size="12" />
-                  <PriorityBadge :priority="selectedShip.priority" size="sm" />
+                <div v-if="selectedShip" class="mt-2 space-y-2">
+                  <div class="flex items-center gap-2 text-[11px] font-mono">
+                    <CargoTypeIcon :type="selectedShip.cargoType" show-label :size="12" />
+                    <PriorityBadge :priority="selectedShip.priority" size="sm" />
+                  </div>
+                  <div v-if="selectedShip.tags && selectedShip.tags.length > 0" class="flex flex-wrap gap-1">
+                    <ShipTagBadge
+                      v-for="tag in selectedShip.tags"
+                      :key="tag"
+                      :tag="tag"
+                      size="xs"
+                    />
+                  </div>
+                  <div
+                    v-if="selectedShip.guaranteeRequirements?.earliestOperationTime || selectedShip.guaranteeRequirements?.mustPriorityBerth || (selectedShip.guaranteeRequirements?.forbiddenBerthCategories && selectedShip.guaranteeRequirements.forbiddenBerthCategories.length > 0) || selectedShip.guaranteeRequirements?.requiresRemarks"
+                    class="p-2 rounded bg-harbor-orange/10 border border-harbor-orange/30"
+                  >
+                    <p class="text-[9px] font-mono font-medium text-harbor-orange mb-1.5 uppercase tracking-wider">
+                      保障要求
+                    </p>
+                    <div class="space-y-1">
+                      <div v-if="selectedShip.guaranteeRequirements?.earliestOperationTime" class="flex items-center gap-1 text-[10px] font-mono text-console-300">
+                        <Clock class="w-3 h-3 text-harbor-cyan" />
+                        <span>最早作业时间：</span>
+                        <span class="text-harbor-cyan font-semibold">{{ selectedShip.guaranteeRequirements.earliestOperationTime }}</span>
+                      </div>
+                      <div v-if="selectedShip.guaranteeRequirements?.mustPriorityBerth" class="flex items-center gap-1 text-[10px] font-mono text-console-300">
+                        <Zap class="w-3 h-3 text-harbor-orange" />
+                        <span class="text-harbor-orange font-semibold">必须优先靠泊</span>
+                      </div>
+                      <div v-if="selectedShip.guaranteeRequirements?.forbiddenBerthCategories?.length" class="flex items-start gap-1 text-[10px] font-mono text-console-300">
+                        <AlertTriangle class="w-3 h-3 text-harbor-red mt-0.5" />
+                        <span>禁止泊位类型：</span>
+                        <span class="text-harbor-red font-semibold">
+                          {{ selectedShip.guaranteeRequirements.forbiddenBerthCategories.map(c => FORBIDDEN_BERTH_CATEGORY_LABELS[c]).join('、') }}
+                        </span>
+                      </div>
+                      <div v-if="selectedShip.guaranteeRequirements?.requiresRemarks" class="flex items-center gap-1 text-[10px] font-mono text-console-300">
+                        <FileText class="w-3 h-3 text-harbor-blue" />
+                        <span class="text-harbor-blue font-semibold">必须填写备注</span>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -599,15 +668,30 @@ async function onSubmit() {
 
             <div>
               <label class="flex items-center gap-1.5 text-[11px] font-mono text-console-300 uppercase tracking-wider mb-1.5">
-                <FileText class="w-3.5 h-3.5 text-harbor-cyan" />
+                <FileText :class="['w-3.5 h-3.5', selectedShip?.guaranteeRequirements?.requiresRemarks ? 'text-harbor-blue' : 'text-harbor-cyan']" />
                 调度备注
+                <span v-if="selectedShip?.guaranteeRequirements?.requiresRemarks" class="text-harbor-blue text-[9px]">
+                  * 必填
+                </span>
               </label>
               <textarea
                 v-model="form.remarks"
                 rows="3"
-                placeholder="输入调度备注、特殊要求等..."
-                class="w-full px-3 py-2 text-xs font-mono bg-console-800/80 border border-console-500/40 rounded text-console-100 placeholder:text-console-500 focus:outline-none focus:border-harbor-cyan/50 focus:shadow-glow-cyan transition-all resize-none"
+                :placeholder="selectedShip?.guaranteeRequirements?.requiresRemarks ? '该船要求必须填写作业备注，请补充说明...' : '输入调度备注、特殊要求等...'"
+                :class="[
+                  'w-full px-3 py-2 text-xs font-mono bg-console-800/80 border rounded text-console-100 placeholder:text-console-500 focus:outline-none focus:shadow-glow-cyan transition-all resize-none',
+                  selectedShip?.guaranteeRequirements?.requiresRemarks && (!form.remarks || form.remarks.trim().length === 0)
+                    ? 'border-harbor-blue/50 focus:border-harbor-blue/70 bg-harbor-blue/5'
+                    : 'border-console-500/40 focus:border-harbor-cyan/50',
+                ]"
               />
+              <p
+                v-if="selectedShip?.guaranteeRequirements?.requiresRemarks && (!form.remarks || form.remarks.trim().length === 0)"
+                class="text-[10px] font-mono text-harbor-blue mt-1 flex items-center gap-1"
+              >
+                <AlertTriangle class="w-3 h-3" />
+                该船舶要求必须填写作业备注
+              </p>
             </div>
           </div>
 

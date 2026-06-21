@@ -1,5 +1,45 @@
 export type ShipPriority = 'critical' | 'high' | 'normal' | 'low';
 
+export type ShipTag =
+  | 'key_customer'
+  | 'dangerous_operation'
+  | 'super_draft'
+  | 'night_restricted'
+  | 'berthing_sensitive';
+
+export const SHIP_TAG_LABELS: Record<ShipTag, string> = {
+  key_customer: '重点客户船',
+  dangerous_operation: '危险作业船',
+  super_draft: '超大吃水船',
+  night_restricted: '夜间限制船',
+  berthing_sensitive: '靠泊敏感船',
+};
+
+export const SHIP_TAG_COLORS: Record<ShipTag, { bg: string; text: string; border: string }> = {
+  key_customer: { bg: 'bg-harbor-purple/15', text: 'text-harbor-purple', border: 'border-harbor-purple/40' },
+  dangerous_operation: { bg: 'bg-harbor-red/15', text: 'text-harbor-red', border: 'border-harbor-red/40' },
+  super_draft: { bg: 'bg-harbor-orange/15', text: 'text-harbor-orange', border: 'border-harbor-orange/40' },
+  night_restricted: { bg: 'bg-harbor-yellow/15', text: 'text-harbor-yellow', border: 'border-harbor-yellow/40' },
+  berthing_sensitive: { bg: 'bg-harbor-blue/15', text: 'text-harbor-blue', border: 'border-harbor-blue/40' },
+};
+
+export type ForbiddenBerthCategory = 'container' | 'bulk' | 'liquid' | 'general' | 'ro-ro';
+
+export const FORBIDDEN_BERTH_CATEGORY_LABELS: Record<ForbiddenBerthCategory, string> = {
+  container: '集装箱泊位',
+  bulk: '散货泊位',
+  liquid: '液体货泊位',
+  general: '杂货泊位',
+  'ro-ro': '滚装泊位',
+};
+
+export interface ShipGuaranteeRequirements {
+  earliestOperationTime?: string;
+  mustPriorityBerth?: boolean;
+  forbiddenBerthCategories?: ForbiddenBerthCategory[];
+  requiresRemarks?: boolean;
+}
+
 export type OperationStatus =
   | 'anchored'
   | 'approaching'
@@ -44,6 +84,8 @@ export interface Ship {
   priority: ShipPriority;
   flag?: string;
   buildYear?: number;
+  tags?: ShipTag[];
+  guaranteeRequirements?: ShipGuaranteeRequirements;
 }
 
 export interface Berth {
@@ -123,7 +165,12 @@ export interface ScheduleConflict {
     | 'buffer_time_insufficient'
     | 'team_conflict'
     | 'dangerous_cargo_isolation'
-    | 'night_operation_limit';
+    | 'night_operation_limit'
+    | 'tag_earliest_time'
+    | 'tag_priority_berth'
+    | 'tag_forbidden_berth'
+    | 'tag_missing_remarks'
+    | 'tag_night_restricted';
   severity: 'error' | 'warning';
   scheduleId: string;
   relatedScheduleId?: string;

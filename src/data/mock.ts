@@ -42,6 +42,11 @@ export const mockShips: Ship[] = [
     priority: 'critical',
     flag: '中国',
     buildYear: 2018,
+    tags: ['key_customer', 'berthing_sensitive'],
+    guaranteeRequirements: {
+      mustPriorityBerth: true,
+      requiresRemarks: true,
+    },
   },
   {
     id: 'ship-002',
@@ -57,6 +62,10 @@ export const mockShips: Ship[] = [
     priority: 'high',
     flag: '马耳他',
     buildYear: 2019,
+    tags: ['key_customer'],
+    guaranteeRequirements: {
+      mustPriorityBerth: true,
+    },
   },
   {
     id: 'ship-003',
@@ -72,6 +81,11 @@ export const mockShips: Ship[] = [
     priority: 'normal',
     flag: '巴哈马',
     buildYear: 2009,
+    tags: ['berthing_sensitive'],
+    guaranteeRequirements: {
+      forbiddenBerthCategories: ['liquid', 'bulk'],
+      requiresRemarks: true,
+    },
   },
   {
     id: 'ship-004',
@@ -87,6 +101,11 @@ export const mockShips: Ship[] = [
     priority: 'high',
     flag: '丹麦',
     buildYear: 2013,
+    tags: ['key_customer'],
+    guaranteeRequirements: {
+      earliestOperationTime: '06:00',
+      mustPriorityBerth: true,
+    },
   },
   {
     id: 'ship-005',
@@ -102,6 +121,8 @@ export const mockShips: Ship[] = [
     priority: 'normal',
     flag: '巴拿马',
     buildYear: 2020,
+    tags: [],
+    guaranteeRequirements: {},
   },
   {
     id: 'ship-006',
@@ -117,6 +138,12 @@ export const mockShips: Ship[] = [
     priority: 'critical',
     flag: '希腊',
     buildYear: 2015,
+    tags: ['super_draft', 'key_customer', 'night_restricted'],
+    guaranteeRequirements: {
+      earliestOperationTime: '05:00',
+      mustPriorityBerth: true,
+      requiresRemarks: true,
+    },
   },
   {
     id: 'ship-007',
@@ -132,6 +159,13 @@ export const mockShips: Ship[] = [
     priority: 'high',
     flag: '马绍尔群岛',
     buildYear: 2003,
+    tags: ['dangerous_operation', 'night_restricted', 'super_draft'],
+    guaranteeRequirements: {
+      earliestOperationTime: '07:00',
+      forbiddenBerthCategories: ['ro-ro', 'general'],
+      mustPriorityBerth: true,
+      requiresRemarks: true,
+    },
   },
   {
     id: 'ship-008',
@@ -147,6 +181,10 @@ export const mockShips: Ship[] = [
     priority: 'normal',
     flag: '法国',
     buildYear: 2020,
+    tags: ['key_customer'],
+    guaranteeRequirements: {
+      mustPriorityBerth: true,
+    },
   },
   {
     id: 'ship-009',
@@ -162,6 +200,8 @@ export const mockShips: Ship[] = [
     priority: 'low',
     flag: '新加坡',
     buildYear: 2016,
+    tags: [],
+    guaranteeRequirements: {},
   },
   {
     id: 'ship-010',
@@ -177,6 +217,11 @@ export const mockShips: Ship[] = [
     priority: 'normal',
     flag: '巴拿马',
     buildYear: 2008,
+    tags: ['super_draft'],
+    guaranteeRequirements: {
+      earliestOperationTime: '06:00',
+      requiresRemarks: true,
+    },
   },
 ];
 

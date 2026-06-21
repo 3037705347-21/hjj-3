@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import type { BerthSchedule } from '../../types';
+import type { BerthSchedule, ShipTag } from '../../types';
 import { useScheduleStore } from '../../stores/schedule';
 import PriorityBadge from '../common/PriorityBadge.vue';
 import CargoTypeIcon from '../common/CargoTypeIcon.vue';
+import { SHIP_TAG_COLORS } from '../../types';
 import { format } from 'date-fns';
 
 const props = defineProps<{
@@ -16,6 +17,10 @@ const props = defineProps<{
   errorCount?: number;
   warningCount?: number;
 }>();
+
+const getTagDotColor = (tag: ShipTag) => {
+  return SHIP_TAG_COLORS[tag].text.replace('text-', 'bg-');
+};
 
 const emit = defineEmits<{
   (e: 'dragstart', event: DragEvent, scheduleId: string): void;
@@ -56,6 +61,14 @@ const statusColors: Record<string, string> = {
       height: `${height}px`,
     }"
   >
+    <div v-if="ship?.tags && ship.tags.length > 0" class="absolute top-0 left-0 right-0 flex gap-0.5 px-1.5 pt-1">
+      <span
+        v-for="tag in ship.tags.slice(0, 5)"
+        :key="tag"
+        class="w-1.5 h-1.5 rounded-full shadow-sm"
+        :class="getTagDotColor(tag)"
+      />
+    </div>
     <div class="h-full p-2 flex flex-col justify-center min-w-0">
       <div class="flex items-center gap-1.5 min-w-0">
         <CargoTypeIcon v-if="ship" :type="ship.cargoType" :size="12" />
