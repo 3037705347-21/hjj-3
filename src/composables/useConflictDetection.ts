@@ -535,16 +535,22 @@ export function useConflictDetection() {
     const forbidden = ship.guaranteeRequirements?.forbiddenBerthCategories;
     if (!forbidden || forbidden.length === 0) return null;
 
-    const berthCategory = BERTH_CATEGORY_MAP[berth.allowedCargo[0]];
-    if (!berthCategory) return null;
+    const matchedForbidden: ForbiddenBerthCategory[] = [];
+    berth.allowedCargo.forEach((cargoType) => {
+      const berthCategory = BERTH_CATEGORY_MAP[cargoType];
+      if (berthCategory && forbidden.includes(berthCategory)) {
+        matchedForbidden.push(berthCategory);
+      }
+    });
 
-    if (forbidden.includes(berthCategory)) {
+    if (matchedForbidden.length > 0) {
+      const matchedLabels = matchedForbidden.map((c) => FORBIDDEN_BERTH_CATEGORY_LABELS[c]).join('、');
       return {
         id: `conflict-tag-forbidden-berth-${schedule.id}`,
         type: 'tag_forbidden_berth',
         severity: 'error',
         scheduleId: schedule.id,
-        message: `泊位类型禁止: 该船被禁止分配至【${FORBIDDEN_BERTH_CATEGORY_LABELS[berthCategory]}】泊位，当前泊位${berth.name}类型不匹配`,
+        message: `泊位类型禁止: 该船被禁止分配至【${matchedLabels}】泊位，当前泊位${berth.name}支持的货种包含禁止类型`,
         suggestedAction: `建议更换至非${forbidden.map((c) => FORBIDDEN_BERTH_CATEGORY_LABELS[c]).join('、')}类型的泊位`,
       };
     }

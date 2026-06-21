@@ -134,16 +134,22 @@ function validateTagsForStatus(status: OperationStatus): TagValidationResult[] {
 
   if (status === 'berthing' && guarantees.forbiddenBerthCategories && guarantees.forbiddenBerthCategories.length > 0) {
     const berth = store.getBerthById(props.schedule.berthId);
-    if (berth && berth.allowedCargo[0]) {
+    if (berth && berth.allowedCargo.length > 0) {
       const categoryMap: Record<string, string> = { container: 'container', bulk: 'bulk', liquid: 'liquid', general: 'general', 'ro-ro': 'ro-ro' };
-      const berthCategory = categoryMap[berth.allowedCargo[0]];
-      if (berthCategory && guarantees.forbiddenBerthCategories.includes(berthCategory as any)) {
+      const matchedForbidden: string[] = [];
+      berth.allowedCargo.forEach((cargoType) => {
+        const berthCategory = categoryMap[cargoType];
+        if (berthCategory && guarantees.forbiddenBerthCategories!.includes(berthCategory as any)) {
+          matchedForbidden.push(FORBIDDEN_BERTH_CATEGORY_LABELS[berthCategory as keyof typeof FORBIDDEN_BERTH_CATEGORY_LABELS]);
+        }
+      });
+      if (matchedForbidden.length > 0) {
         results.push({
           type: 'error',
           icon: Ban,
           iconColor: 'text-harbor-red',
           title: '泊位类型禁止',
-          message: `该船被禁止分配至【${FORBIDDEN_BERTH_CATEGORY_LABELS[berthCategory as keyof typeof FORBIDDEN_BERTH_CATEGORY_LABELS]}】泊位(当前：${berth.name})，请更换泊位`,
+          message: `该船被禁止分配至【${matchedForbidden.join('、')}】泊位(当前：${berth.name}支持的货种包含禁止类型)，请更换泊位`,
         });
       }
     }
